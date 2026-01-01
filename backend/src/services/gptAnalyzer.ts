@@ -438,77 +438,92 @@ export class GPTConversationAnalyzer {
         messages: [
           {
             role: 'system',
-            content: `You are a sales indicator analyzer. Score ALL 27 indicators and return the TOP 5 highest-scoring ones.
+            content: `You analyze sales conversations to identify which of the 27 psychological indicators are MOST ACTIVE in the conversation.
 
-THE 27 INDICATORS (from CSV) - Score each 1-10, return TOP 5:
+⚠️ CRITICAL: You MUST analyze the ACTUAL conversation text. Score ALL 27 indicators based on what the prospect actually says, then return only the TOP 5 with the HIGHEST scores.
 
-PILLAR 1 - Perceived Spread (Pain & Desire):
-1. Pain Awareness - How aware are they of their problem?
-2. Desire Clarity - How clear is their vision of what they want?
-3. Desire Priority - How important is solving this to them?
-4. Duration of Dissatisfaction - How long have they lived with this?
+THE 27 INDICATORS - Score each 1-10 based on EVIDENCE in the conversation:
 
-PILLAR 2 - Urgency:
-5. Time Pressure - Is there an external deadline?
-6. Cost of Delay - What's at stake if they wait?
-7. Internal Timing - Is something internal driving urgency?
-8. Environmental Availability - Can they engage now?
+PILLAR 1 - Pain & Desire (IDs 1-4):
+• ID 1: Pain Awareness - Does the prospect express awareness of their pain/problem?
+• ID 2: Desire Clarity - Does the prospect have a clear vision of what they want?
+• ID 3: Desire Priority - Does solving this seem important to them?
+• ID 4: Duration of Dissatisfaction - Have they lived with this problem long?
 
-PILLAR 3 - Decisiveness:
-9. Decision Authority - Are they the decision maker?
-10. Decision Style - How do they typically decide?
-11. Commitment to Decide - Are they ready to commit?
-12. Self-Permission - Do they give themselves permission?
+PILLAR 2 - Urgency (IDs 5-8):
+• ID 5: Time Pressure - Is there an external deadline mentioned?
+• ID 6: Cost of Delay - Do they express what's at stake if they wait?
+• ID 7: Internal Timing - Is something internal driving urgency?
+• ID 8: Environmental Availability - Can they engage/act now?
 
-PILLAR 4 - Available Money:
-13. Resource Access - Do they have funds available?
-14. Resource Fluidity - Can they move money around?
-15. Investment Mindset - Do they see value in investing?
-16. Resourcefulness - Would they find a way if motivated?
+PILLAR 3 - Decisiveness (IDs 9-12):
+• ID 9: Decision Authority - Are they the decision maker?
+• ID 10: Decision Style - How do they typically make decisions?
+• ID 11: Commitment to Decide - Are they ready to commit?
+• ID 12: Self-Permission - Do they give themselves permission to act?
 
-PILLAR 5 - Responsibility & Ownership:
-17. Problem Recognition - Do they own the problem?
-18. Solution Ownership - Do they own the solution?
-19. Locus of Control - Do they believe they control outcomes?
-20. Integrity (Desire vs Action) - Do they follow through?
+PILLAR 4 - Money (IDs 13-16):
+• ID 13: Resource Access - Do they have funds available?
+• ID 14: Resource Fluidity - Can they move money around?
+• ID 15: Investment Mindset - Do they see value in investing?
+• ID 16: Resourcefulness - Would they find a way if motivated?
 
-PILLAR 6 - Price Sensitivity:
-21. Emotional Spending - How do they feel about spending?
-22. Negotiation Reflex - Do they try to negotiate?
-23. Structural Rigidity - Do they need flexible terms?
+PILLAR 5 - Ownership (IDs 17-20):
+• ID 17: Problem Recognition - Do they own the problem?
+• ID 18: Solution Ownership - Do they own the solution?
+• ID 19: Locus of Control - Do they believe they control outcomes?
+• ID 20: Integrity (Desire vs Action) - Do they follow through on desires?
 
-PILLAR 7 - Trust:
-24. External Trust - Do they trust you/the offer?
-25. Internal Trust - Do they trust themselves?
-26. Risk Tolerance - Are they comfortable with uncertainty?
-27. ROI Ownership - Do they own the ROI?
+PILLAR 6 - Price Sensitivity (IDs 21-23):
+• ID 21: Emotional Spending - How do they feel about spending?
+• ID 22: Negotiation Reflex - Do they try to negotiate/ask for discounts?
+• ID 23: Structural Rigidity - Do they need flexible payment terms?
 
-SCORING: 1-3=Low, 4-6=Moderate, 7-10=High
+PILLAR 7 - Trust (IDs 24-27):
+• ID 24: External Trust - Do they trust the seller/offer?
+• ID 25: Internal Trust - Do they trust themselves to succeed?
+• ID 26: Risk Tolerance - Are they comfortable with uncertainty?
+• ID 27: ROI Ownership - Do they own the responsibility for ROI?
 
-Return TOP 5 indicators with HIGHEST intensity (convert score to 0-100 scale: score × 10).
+SCORING RULES:
+- Score 1-3: Low/negative signals or NO evidence in conversation
+- Score 4-6: Moderate/mixed signals
+- Score 7-10: Strong/positive signals with clear evidence
 
-RETURN JSON:
+PROCESS:
+1. Read the conversation carefully
+2. Score ALL 27 indicators based on what you find
+3. Sort by score (highest first)
+4. Return ONLY the TOP 5 highest-scoring indicators
+5. Convert score to intensity: score × 10 = intensity (e.g., score 8 → intensity 80)
+
+COLORS (assign based on indicator's pillar):
+- P1 indicators (1-4): "from-red-500 to-orange-500"
+- P2 indicators (5-8): "from-orange-500 to-amber-500"
+- P3 indicators (9-12): "from-blue-500 to-cyan-500"
+- P4 indicators (13-16): "from-emerald-500 to-teal-500"
+- P5 indicators (17-20): "from-purple-500 to-pink-500"
+- P6 indicators (21-23): "from-amber-500 to-yellow-500"
+- P7 indicators (24-27): "from-cyan-500 to-teal-500"
+
+RETURN JSON FORMAT:
 {"psychologicalDials": [
-  {"name": "Pain Awareness", "intensity": 80, "color": "from-red-500 to-orange-500", "indicatorId": 1},
-  {"name": "Commitment to Decide", "intensity": 70, "color": "from-blue-500 to-cyan-500", "indicatorId": 11}
+  {"name": "[EXACT indicator name]", "intensity": [score×10], "color": "[pillar color]", "indicatorId": [1-27]}
 ]}
 
-COLORS BY PILLAR:
-P1 (1-4): "from-red-500 to-orange-500"
-P2 (5-8): "from-orange-500 to-amber-500"
-P3 (9-12): "from-blue-500 to-cyan-500"
-P4 (13-16): "from-emerald-500 to-teal-500"
-P5 (17-20): "from-purple-500 to-pink-500"
-P6 (21-23): "from-amber-500 to-yellow-500"
-P7 (24-27): "from-cyan-500 to-teal-500"`
+⚠️ The TOP 5 should be DIFFERENT each time based on what's actually in the conversation. If someone talks about money problems, money indicators (13-16) should rank high. If they mention needing partner approval, indicator 9 should rank high. ANALYZE THE ACTUAL CONVERSATION.`
           },
           {
             role: 'user',
-            content: transcript
+            content: `Analyze this sales conversation and return the TOP 5 indicators that are MOST ACTIVATED based on what the prospect actually says:
+
+${transcript}
+
+Remember: Score all 27 indicators, then return only the TOP 5 highest-scoring ones with their intensities.`
           }
         ],
-        temperature: 0.2,
-        max_tokens: 500,
+        temperature: 0.4,
+        max_tokens: 600,
         response_format: { type: 'json_object' }
       });
 
