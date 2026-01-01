@@ -102,6 +102,32 @@ npm install
 npm run dev
 ```
 
+## Deployment / Hosting
+
+When deploying to a hosting service (Vercel, Railway, Render, Heroku, etc.):
+
+### Backend Environment Variables
+
+Set these environment variables in your hosting platform's dashboard:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `OPENAI_API_KEY` | Yes | Your OpenAI API key |
+| `PORT` | No | Server port (default: 3001) |
+| `NODE_ENV` | No | Set to `production` for production |
+
+### Frontend Environment Variables (Optional)
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `VITE_WS_URL` | No | WebSocket URL (auto-detected if not set) |
+
+### Important Notes
+
+1. The `.env` file is NOT committed to Git for security reasons
+2. You must set `OPENAI_API_KEY` in your hosting platform's environment variables
+3. The frontend automatically detects the WebSocket URL based on the current domain
+
 ## CSV Files
 
 The system uses CSV files in the project root that define the sales logic:

@@ -40,7 +40,7 @@ function App() {
 
   useEffect(() => {
     try {
-      const wsClient = getWebSocketClient('ws://localhost:3001');
+      const wsClient = getWebSocketClient(); // URL determined automatically
       setWsClientRef(wsClient);
       
       // Handle partial updates (progressive updates - FAST)

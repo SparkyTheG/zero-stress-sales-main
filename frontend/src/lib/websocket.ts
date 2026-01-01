@@ -7,6 +7,32 @@ export interface WebSocketMessage {
   error?: string;
 }
 
+// Get WebSocket URL dynamically based on current location
+function getDefaultWebSocketUrl(): string {
+  // Check for environment variable first (for development)
+  const envUrl = import.meta.env.VITE_WS_URL;
+  if (envUrl) {
+    return envUrl;
+  }
+  
+  // For local development
+  if (typeof window !== 'undefined') {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.hostname;
+    
+    // If running on localhost, use port 3001 for backend
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return `ws://${host}:3001`;
+    }
+    
+    // For production deployment, use same host with /ws path or port 3001
+    // Adjust this based on your deployment setup
+    return `${protocol}//${host}:3001`;
+  }
+  
+  return 'ws://localhost:3001';
+}
+
 export class AnalysisWebSocket {
   private ws: WebSocket | null = null;
   private sessionId: string | null = null;
@@ -17,7 +43,9 @@ export class AnalysisWebSocket {
   private onPartialUpdateCallback?: (type: string, data: any) => void;
   private onErrorCallback?: (error: Error) => void;
 
-  constructor(private url: string = 'ws://localhost:3001') {}
+  constructor(private url: string = getDefaultWebSocketUrl()) {
+    console.log('WebSocket URL:', this.url);
+  }
 
   connect() {
     try {
