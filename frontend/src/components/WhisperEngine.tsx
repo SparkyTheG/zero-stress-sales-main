@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { MessageSquare, Sparkles } from 'lucide-react';
 import { Objection, ScriptStep } from '../types';
 
@@ -5,7 +6,7 @@ interface WhisperEngineProps {
   objections: Objection[];
   selectedObjection: string | null;
   onSelectObjection: (id: string) => void;
-  script: any;
+  scripts: any[];
   onObjectionClick?: (objectionId: string) => void;
 }
 
@@ -13,15 +14,19 @@ export default function WhisperEngine({
   objections,
   selectedObjection,
   onSelectObjection,
-  script,
+  scripts,
   onObjectionClick,
 }: WhisperEngineProps) {
+  const [activeScriptIndex, setActiveScriptIndex] = useState(0);
+
   const handleObjectionClick = (id: string) => {
     onSelectObjection(id);
+    setActiveScriptIndex(0); // Reset to first script when changing objection
     if (onObjectionClick) {
       onObjectionClick(id);
     }
   };
+
   const getColorClass = (probability: number) => {
     if (probability >= 70) return 'from-cyan-500/20 to-blue-500/20 border-cyan-500/40';
     if (probability >= 50) return 'from-teal-500/20 to-cyan-500/20 border-teal-500/40';
@@ -39,6 +44,8 @@ export default function WhisperEngine({
     if (probability >= 50) return 'bg-gradient-to-r from-teal-500 to-cyan-500';
     return 'bg-gradient-to-r from-blue-500 to-indigo-500';
   };
+
+  const currentScript = scripts[activeScriptIndex];
 
   return (
     <div className="relative">
@@ -70,7 +77,7 @@ export default function WhisperEngine({
 
         <p className="text-teal-300/80 mb-6 flex items-center gap-2">
           <span className="text-cyan-400">👆</span>
-          Click an objection to see personalized handling script:
+          Click an objection to see personalized handling scripts:
         </p>
 
         <div className="space-y-3 mb-8">
@@ -103,29 +110,46 @@ export default function WhisperEngine({
           ))}
         </div>
 
-        {script ? (
+        {scripts.length > 0 && currentScript ? (
           <div className="animate-slide-up border-t border-teal-400/20 pt-6">
+            {/* Script Tabs */}
+            <div className="flex gap-2 mb-4">
+              {scripts.map((_, index) => (
+                <button
+                  key={index}
+                  onClick={() => setActiveScriptIndex(index)}
+                  className={`px-4 py-2 rounded-lg font-semibold transition-all duration-200 ${
+                    activeScriptIndex === index
+                      ? 'bg-gradient-to-r from-teal-500 to-cyan-500 text-white shadow-lg shadow-teal-500/30'
+                      : 'bg-gray-800/60 text-teal-300/70 hover:bg-gray-700/60 hover:text-teal-300 border border-teal-400/20'
+                  }`}
+                >
+                  Script {index + 1}
+                </button>
+              ))}
+            </div>
+
             <div className="bg-gradient-to-br from-teal-500/10 to-cyan-500/10 border border-teal-400/40 rounded-2xl p-6 glow-teal">
               <div className="flex items-start gap-3 mb-4">
                 <MessageSquare className="w-6 h-6 text-teal-400 mt-1 flex-shrink-0" />
                 <div>
-                  <h3 className="text-xl font-bold text-teal-300 mb-1">{script.title}</h3>
+                  <h3 className="text-xl font-bold text-teal-300 mb-1">{currentScript.title}</h3>
                   <div className="text-sm space-y-1">
                     <p className="text-cyan-400">
-                      <span className="text-white/60">Trigger:</span> {script.dialTrigger}
+                      <span className="text-white/60">Trigger:</span> {currentScript.dialTrigger}
                     </p>
                     <p className="text-cyan-400">
-                      <span className="text-white/60">Truth Level:</span> {script.truthLevel}%
+                      <span className="text-white/60">Truth Level:</span> {currentScript.truthLevel}%
                     </p>
                     <p className="text-cyan-400">
-                      <span className="text-white/60">Money Style:</span> {script.moneyStyle}
+                      <span className="text-white/60">Money Style:</span> {currentScript.moneyStyle}
                     </p>
                   </div>
                 </div>
               </div>
 
               <div className="space-y-4 mt-6">
-                {script.steps.map((step: ScriptStep) => (
+                {currentScript.steps?.map((step: ScriptStep) => (
                   <div key={step.step} className="bg-gray-900/60 rounded-lg p-4 border border-teal-400/20">
                     <div className="flex items-start gap-3">
                       <span className="text-teal-400 font-bold text-lg flex-shrink-0">
@@ -156,7 +180,7 @@ export default function WhisperEngine({
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <MessageSquare className="w-16 h-16 text-teal-400/30 mb-4" />
               <p className="text-white/50 text-lg">
-                Select an objection above to see your personalized handling script
+                Select an objection above to see your personalized handling scripts
               </p>
             </div>
           </div>
