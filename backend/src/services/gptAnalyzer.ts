@@ -823,35 +823,40 @@ RETURN JSON:
         messages: [
           {
             role: 'system',
-            content: `You are a truth/authenticity analyzer. Analyze the conversation for honesty and coherence.
+            content: `You are a truth/authenticity analyzer for SALES CONVERSATIONS.
 
-YOUR TASK: Score how authentic and coherent the prospect's responses are (0-100).
+CONTEXT: This is a conversation between a CLOSER (salesperson) and a PROSPECT (potential buyer). 
+Your job is to analyze the PROSPECT's responses for authenticity and coherence.
 
-SCORING FACTORS:
+The closer asks questions to understand the prospect's situation, pain points, budget, timeline, and decision-making ability. The prospect's answers reveal how honest and committed they are.
 
-POSITIVE SIGNALS (increase score):
-- Specific details and examples (+5-15)
-- Admitting weaknesses or concerns (+5-10)
-- Consistent messaging throughout (+5-10)
-- Emotional authenticity (+5-10)
-- Taking ownership of problems (+5-10)
+YOUR TASK: Score the PROSPECT's authenticity (0-100).
 
-NEGATIVE SIGNALS (decrease score):
-- Vague or evasive answers (-10-20)
-- Contradictions in statements (-15-20)
-- Says one thing, implies another (-10-15)
-- External blame patterns (-10-15)
-- People-pleasing responses (-5-10)
+POSITIVE SIGNALS (PROSPECT being honest):
+- Gives specific details and real examples (+5-15)
+- Openly admits challenges, fears, or concerns (+5-10)
+- Stays consistent in their answers (+5-10)
+- Shows genuine emotion (frustration, excitement, worry) (+5-10)
+- Takes ownership of their situation (+5-10)
+- Asks thoughtful questions (+3-5)
 
-INCOHERENCE PENALTIES (from CSV):
-T1: Claims HIGH PAIN but shows LOW URGENCY → -15
-T2: Wants CHANGE but avoids DECISION → -15  
-T3: Has MONEY but resists PRICE strongly → -10
-T4: Claims AUTHORITY but needs APPROVAL → -10
-T5: Desires RESULT but won't OWN responsibility → -15
+NEGATIVE SIGNALS (PROSPECT being evasive/inconsistent):
+- Gives vague, generic answers (-10-20)
+- Contradicts earlier statements (-15-20)
+- Says yes but body language/tone says no (-10-15)
+- Blames external factors for everything (-10-15)
+- Gives people-pleasing "yes" answers without substance (-5-10)
+- Avoids direct questions (-5-10)
 
-BASE SCORE: Start at 70, then adjust based on signals detected.
-- Very authentic: 80-100
+INCOHERENCE PENALTIES (contradictions):
+T1: Says they have HIGH PAIN but NO URGENCY to fix it → -15
+T2: Says they WANT CHANGE but won't make a DECISION → -15  
+T3: Says they HAVE MONEY but strongly resists any PRICE → -10
+T4: Claims they're the DECISION MAKER but needs to "check with someone" → -10
+T5: Says they want RESULTS but won't take RESPONSIBILITY → -15
+
+BASE SCORE: Start at 70, adjust based on what the PROSPECT says:
+- Very authentic prospect: 80-100
 - Mostly honest: 60-79
 - Mixed signals: 40-59
 - Defensive/evasive: 20-39
@@ -860,17 +865,15 @@ BASE SCORE: Start at 70, then adjust based on signals detected.
 RETURN JSON:
 {
   "score": 72,
-  "penalties": [
-    {"rule": "T1", "description": "High Pain + Low Urgency", "points": -15, "triggered": true}
-  ],
-  "positiveSignals": ["Gave specific examples about their situation", "Admitted budget concerns openly"],
-  "negativeSignals": ["Vague about timeline"],
-  "explanation": "Mostly authentic with some hesitation around commitment"
+  "penalties": [{"rule": "T1", "description": "High Pain + Low Urgency", "points": -15, "triggered": true}],
+  "positiveSignals": ["Gave specific revenue numbers", "Admitted fear of failure"],
+  "negativeSignals": ["Vague about decision timeline"],
+  "explanation": "Prospect is mostly honest but hesitant about commitment"
 }`
           },
           {
             role: 'user',
-            content: `Analyze the authenticity and coherence of this conversation:\n\n${transcript}`
+            content: `Analyze the PROSPECT's authenticity in this sales conversation between a closer and prospect:\n\n${transcript}`
           }
         ],
         temperature: 0.3,
