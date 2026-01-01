@@ -537,48 +537,28 @@ P7 (24-27): "from-cyan-500 to-teal-500"`
         messages: [
           {
             role: 'system',
-            content: `You are an objection detector. Your job is to find ALL potential objections and concerns in the conversation.
+            content: `You are an objection detector. Find COMPLETE objections from the conversation.
 
-IMPORTANT: Always try to find 3-5 objections. Look for both explicit objections AND implied hesitations.
+CRITICAL RULES:
+1. ONLY return COMPLETE sentences/phrases - never partial or cut-off phrases
+2. Each objection must be at least 4 words and be a complete thought
+3. DO NOT duplicate - if someone says "I am confused about this", don't also include "I am confused"
+4. If the same idea is expressed multiple times, include it ONLY ONCE
+5. Use their ACTUAL words but ensure it's a complete statement
 
-OBJECTION CATEGORIES (detect similar phrases):
-1. PAIN/DESIRE OBJECTIONS:
-   - "Things aren't that bad" / "It's not urgent" / "I'm managing fine"
-   - "I'm not sure what I want" / "I haven't thought about it"
-   - "This isn't a priority" / "Maybe later"
+OBJECTION CATEGORIES:
+1. PAIN/DESIRE: "Things aren't that bad" / "It's not urgent" / "I'm managing fine"
+2. TIMING: "I'm not in a rush" / "I'll think about it later" / "Bad timing"
+3. DECISION: "I need to ask my partner" / "Let me sleep on it" / "I'm not sure"
+4. MONEY: "Too expensive" / "Can't afford it" / "Need to check finances"
+5. TRUST: "I've tried things before" / "What's the guarantee?" / "What if I fail?"
 
-2. TIMING/URGENCY OBJECTIONS:
-   - "I'm not in a rush" / "No deadline"
-   - "I'll think about it later" / "Not the right time"
-   - "It's a busy period" / "Bad timing"
-
-3. DECISION OBJECTIONS:
-   - "I need to ask my partner/spouse/boss" / "Not just my decision"
-   - "I need to think about it" / "Let me sleep on it"
-   - "I'm not sure" / "What if it doesn't work?"
-
-4. MONEY OBJECTIONS:
-   - "I don't have the budget" / "Too expensive" / "Can't afford it"
-   - "Is there a discount?" / "Can you do better on price?"
-   - "I need to check my finances"
-
-5. TRUST/RISK OBJECTIONS:
-   - "I'm not sure it'll work for me" / "I've tried things before"
-   - "I need more proof" / "What's the guarantee?"
-   - "What if I fail?" / "I'm worried about..."
-
-RULES:
-- Find 3-5 objections minimum (look for subtle hesitations too)
-- Use their ACTUAL words when possible
-- Assign probability 60-95 based on how explicit the objection is
-- Map to indicator number (1-27)
-
-RETURN JSON with 3-5 objections:
+RETURN JSON (only unique, complete objections):
 {"objections": [
-  {"id": "obj1", "text": "exact words they said", "probability": 85, "indicator": 11},
-  {"id": "obj2", "text": "another concern", "probability": 75, "indicator": 13},
-  {"id": "obj3", "text": "implied hesitation", "probability": 65, "indicator": 9}
-]}`
+  {"id": "obj1", "text": "complete sentence they said", "probability": 85, "indicator": 11}
+]}
+
+If there are NO clear objections, return: {"objections": []}`
           },
           {
             role: 'user',
@@ -596,24 +576,63 @@ RETURN JSON with 3-5 objections:
       const result = JSON.parse(content);
       let objections = result.objections || [];
       
-      // Deduplicate objections by text (case-insensitive, trimmed)
-      const seen = new Set<string>();
+      // Step 1: Filter out objections that are too short (less than 4 words)
       objections = objections.filter((obj: any) => {
-        const normalizedText = (obj.text || '').toLowerCase().trim();
-        if (seen.has(normalizedText)) {
+        const text = (obj.text || '').trim();
+        const wordCount = text.split(/\s+/).filter((w: string) => w.length > 0).length;
+        if (wordCount < 4) {
+          console.log(`[MODEL 2] Filtering too short: "${text}" (${wordCount} words)`);
           return false;
         }
-        seen.add(normalizedText);
         return true;
       });
       
-      // Ensure each objection has a unique, stable ID based on position
+      // Step 2: Remove objections that are substrings of other objections
+      objections = objections.filter((obj: any, index: number) => {
+        const text = (obj.text || '').toLowerCase().trim();
+        for (let i = 0; i < objections.length; i++) {
+          if (i !== index) {
+            const otherText = (objections[i].text || '').toLowerCase().trim();
+            // If this text is contained within a longer objection, filter it out
+            if (otherText.length > text.length && otherText.includes(text)) {
+              console.log(`[MODEL 2] Filtering substring: "${obj.text}" is part of "${objections[i].text}"`);
+              return false;
+            }
+          }
+        }
+        return true;
+      });
+      
+      // Step 3: Remove objections with very similar content (>80% overlap)
+      const uniqueObjections: any[] = [];
+      for (const obj of objections) {
+        const text = (obj.text || '').toLowerCase().trim();
+        const isDuplicate = uniqueObjections.some(existing => {
+          const existingText = (existing.text || '').toLowerCase().trim();
+          // Check if texts share >80% of words
+          const textWords = new Set(text.split(/\s+/).filter((w: string) => w.length > 2));
+          const existingWords = new Set(existingText.split(/\s+/).filter((w: string) => w.length > 2));
+          const intersection = [...textWords].filter(w => existingWords.has(w)).length;
+          const similarity = intersection / Math.max(textWords.size, existingWords.size);
+          if (similarity > 0.8) {
+            console.log(`[MODEL 2] Filtering similar (${(similarity * 100).toFixed(0)}%): "${obj.text}" ~ "${existing.text}"`);
+            return true;
+          }
+          return false;
+        });
+        if (!isDuplicate) {
+          uniqueObjections.push(obj);
+        }
+      }
+      objections = uniqueObjections;
+      
+      // Step 4: Assign stable IDs
       objections = objections.slice(0, 5).map((obj: any, index: number) => ({
         ...obj,
         id: `obj${index + 1}` // Ensure consistent IDs: obj1, obj2, obj3, obj4, obj5
       }));
       
-      console.log(`[MODEL 2] Detected ${objections.length} unique objections:`, objections.map((o: any) => o.text));
+      console.log(`[MODEL 2] Final ${objections.length} unique objections:`, objections.map((o: any) => o.text));
       return objections;
     } catch (error) {
       console.error('[MODEL 2] Error:', error);
