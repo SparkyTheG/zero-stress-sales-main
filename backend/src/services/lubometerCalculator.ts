@@ -1,5 +1,4 @@
 import type { PillarScore, LubometerResult, LubometerTier, TruthIndexResult } from '../types/analysis.js';
-import { getPillarCalculator } from './pillarCalculator.js';
 
 export class LubometerCalculator {
   // Price tiers for readiness calculation
@@ -13,10 +12,8 @@ export class LubometerCalculator {
     pillars: PillarScore[],
     truthIndex: TruthIndexResult
   ): LubometerResult {
-    const calculator = getPillarCalculator();
-    
     // Step 1-5: Get raw score (sum of weighted pillar scores)
-    const rawScore = calculator.getRawScore(pillars);
+    const rawScore = this.getRawScore(pillars);
 
     // Step 6: Apply Truth Index penalties
     const penalties = this.calculatePenalties(pillars, truthIndex);
@@ -38,6 +35,12 @@ export class LubometerCalculator {
       readinessZone,
       priceTiers,
     };
+  }
+
+  private getRawScore(pillars: PillarScore[]): number {
+    // Sum of all weighted pillar scores (max is typically ~90)
+    if (pillars.length === 0) return 0;
+    return pillars.reduce((sum, pillar) => sum + pillar.weightedScore, 0);
   }
 
   private calculatePenalties(

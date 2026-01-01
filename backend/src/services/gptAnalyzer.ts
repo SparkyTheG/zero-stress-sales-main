@@ -702,19 +702,25 @@ RETURN JSON:
       });
 
       const content = response.choices[0]?.message?.content;
-      if (!content) throw new Error('No response');
+      if (!content) throw new Error('No response from GPT');
       
       const result = JSON.parse(content);
       const indicators = this.validateIndicators(result.indicators || []);
+      console.log(`[MODEL 4] Validated ${indicators.length} indicators`);
 
-      // Step 2: Calculate using local CSV-based calculators
+      // Step 2: Calculate using local calculators (no CSV dependency)
       const pillarCalculator = getPillarCalculator();
       const truthIndexCalculator = getTruthIndexCalculator();
       const lubometerCalculator = getLubometerCalculator();
 
       const pillars = await pillarCalculator.calculatePillars(indicators);
+      console.log(`[MODEL 4] Calculated ${pillars.length} pillars:`, pillars.map(p => `${p.id}=${p.averageScore.toFixed(1)}`).join(', '));
+      
       const truthIndex = await truthIndexCalculator.calculate(pillars, indicators);
+      console.log(`[MODEL 4] Truth Index: ${truthIndex.score}, penalties: ${truthIndex.penalties.length}`);
+      
       const lubometer = lubometerCalculator.calculate(pillars, truthIndex);
+      console.log(`[MODEL 4] Lubometer: raw=${lubometer.rawScore.toFixed(1)}, final=${lubometer.finalScore.toFixed(1)}, tiers:`, lubometer.priceTiers.map(t => `${t.label}=${t.readiness}%`).join(', '));
 
       // Check close blockers
       const p1 = pillars.find(p => p.id === 'P1');

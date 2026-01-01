@@ -1,10 +1,7 @@
 import type { PillarScore, IndicatorScore, TruthIndexResult, TruthIndexPenalty } from '../types/analysis.js';
-import { getCSVParser } from '../data/csvParser.js';
 
 export class TruthIndexCalculator {
   async calculate(pillars: PillarScore[], indicators: IndicatorScore[]): Promise<TruthIndexResult> {
-    const parser = await getCSVParser();
-    const rules = parser.getTruthIndexRules();
     const penalties: TruthIndexPenalty[] = [];
 
     // Get pillar averages for calculations
