@@ -826,49 +826,52 @@ RETURN JSON:
             content: `You are a truth/authenticity analyzer for SALES CONVERSATIONS.
 
 CONTEXT: This is a conversation between a CLOSER (salesperson) and a PROSPECT (potential buyer). 
-Your job is to analyze the PROSPECT's responses for authenticity and coherence.
+Analyze the PROSPECT's responses for authenticity and coherence.
 
-The closer asks questions to understand the prospect's situation, pain points, budget, timeline, and decision-making ability. The prospect's answers reveal how honest and committed they are.
+⚠️ SCORING RULE: START AT 70, THEN ADJUST UP OR DOWN
 
-YOUR TASK: Score the PROSPECT's authenticity (0-100).
+CALCULATION METHOD:
+1. Start with BASE SCORE = 70
+2. Add points for positive signals (can go UP to 100)
+3. Subtract points for negative signals (can go DOWN to 0)
 
-POSITIVE SIGNALS (PROSPECT being honest):
-- Gives specific details and real examples (+5-15)
-- Openly admits challenges, fears, or concerns (+5-10)
-- Stays consistent in their answers (+5-10)
-- Shows genuine emotion (frustration, excitement, worry) (+5-10)
-- Takes ownership of their situation (+5-10)
-- Asks thoughtful questions (+3-5)
+POSITIVE SIGNALS (INCREASE score from 70):
+- Specific details and real examples: +5 to +15
+- Admits challenges, fears, or concerns: +5 to +10
+- Consistent answers throughout: +3 to +8
+- Shows genuine emotion: +3 to +8
+- Takes ownership of their situation: +5 to +10
+- Asks thoughtful questions: +2 to +5
 
-NEGATIVE SIGNALS (PROSPECT being evasive/inconsistent):
-- Gives vague, generic answers (-10-20)
-- Contradicts earlier statements (-15-20)
-- Says yes but body language/tone says no (-10-15)
-- Blames external factors for everything (-10-15)
-- Gives people-pleasing "yes" answers without substance (-5-10)
-- Avoids direct questions (-5-10)
+NEGATIVE SIGNALS (DECREASE score from 70):
+- Vague, generic answers: -5 to -15
+- Contradicts earlier statements: -10 to -20
+- People-pleasing "yes" without substance: -5 to -10
+- Blames external factors: -5 to -10
+- Avoids direct questions: -5 to -10
 
-INCOHERENCE PENALTIES (contradictions):
-T1: Says they have HIGH PAIN but NO URGENCY to fix it → -15
-T2: Says they WANT CHANGE but won't make a DECISION → -15  
-T3: Says they HAVE MONEY but strongly resists any PRICE → -10
-T4: Claims they're the DECISION MAKER but needs to "check with someone" → -10
-T5: Says they want RESULTS but won't take RESPONSIBILITY → -15
+INCOHERENCE PENALTIES (major contradictions):
+- High PAIN but no URGENCY: -15
+- Wants CHANGE but won't DECIDE: -15  
+- Has MONEY but resists PRICE: -10
+- Claims AUTHORITY but needs approval: -10
+- Wants RESULTS but avoids RESPONSIBILITY: -15
 
-BASE SCORE: Start at 70, adjust based on what the PROSPECT says:
-- Very authentic prospect: 80-100
-- Mostly honest: 60-79
-- Mixed signals: 40-59
-- Defensive/evasive: 20-39
-- Highly inconsistent: 0-19
+SCORE INTERPRETATION:
+- 85-100: Very authentic, honest prospect
+- 70-84: Mostly honest, some areas unclear
+- 50-69: Mixed signals, needs more probing
+- 30-49: Defensive or evasive
+- 0-29: Highly inconsistent, likely not genuine
 
 RETURN JSON:
 {
-  "score": 72,
-  "penalties": [{"rule": "T1", "description": "High Pain + Low Urgency", "points": -15, "triggered": true}],
-  "positiveSignals": ["Gave specific revenue numbers", "Admitted fear of failure"],
-  "negativeSignals": ["Vague about decision timeline"],
-  "explanation": "Prospect is mostly honest but hesitant about commitment"
+  "score": 70,
+  "adjustment": "+5 for specific details, -8 for vague timeline = net -3",
+  "penalties": [],
+  "positiveSignals": ["List actual positive things they said"],
+  "negativeSignals": ["List actual concerning things"],
+  "explanation": "Brief summary of their authenticity"
 }`
           },
           {
@@ -1422,9 +1425,9 @@ Return ONLY a JSON object with objectionScripts field:
         ],
       },
       truthIndex: {
-        score: 100,
+        score: 70,
         penalties: [],
-        explanation: 'Awaiting conversation data',
+        explanation: 'Starting score - awaiting conversation data',
       },
       objections: [],
       psychologicalDials: [],
