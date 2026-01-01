@@ -115,12 +115,18 @@ function App() {
 
   // Use only AI-generated scripts - no mock data fallback
   // Scripts are keyed as obj1_1, obj1_2, etc. (5 per objection)
-  // Find the first script for the selected objection
-  const currentScript = selectedObjection 
-    ? (aiObjectionScripts[selectedObjection] || 
-       aiObjectionScripts[`${selectedObjection}_1`] || 
-       null)
-    : null;
+  // Find scripts for the selected objection
+  const currentScripts = selectedObjection 
+    ? Object.entries(aiObjectionScripts)
+        .filter(([key]) => key.startsWith(`${selectedObjection}_`))
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([_, script]) => script)
+    : [];
+  
+  // Get the first script for display, or the script directly if not using variations
+  const currentScript = currentScripts.length > 0 
+    ? currentScripts[0] 
+    : (selectedObjection ? aiObjectionScripts[selectedObjection] : null);
 
   // Handle transcript from speech recognition
   const handleTranscript = useCallback((text: string, isFinal: boolean) => {

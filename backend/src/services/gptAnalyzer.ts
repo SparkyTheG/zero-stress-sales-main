@@ -594,8 +594,26 @@ RETURN JSON with 3-5 objections:
       if (!content) return [];
       
       const result = JSON.parse(content);
-      const objections = (result.objections || []).slice(0, 5);
-      console.log(`[MODEL 2] Detected ${objections.length} objections:`, objections.map((o: any) => o.text));
+      let objections = result.objections || [];
+      
+      // Deduplicate objections by text (case-insensitive, trimmed)
+      const seen = new Set<string>();
+      objections = objections.filter((obj: any) => {
+        const normalizedText = (obj.text || '').toLowerCase().trim();
+        if (seen.has(normalizedText)) {
+          return false;
+        }
+        seen.add(normalizedText);
+        return true;
+      });
+      
+      // Ensure each objection has a unique, stable ID based on position
+      objections = objections.slice(0, 5).map((obj: any, index: number) => ({
+        ...obj,
+        id: `obj${index + 1}` // Ensure consistent IDs: obj1, obj2, obj3, obj4, obj5
+      }));
+      
+      console.log(`[MODEL 2] Detected ${objections.length} unique objections:`, objections.map((o: any) => o.text));
       return objections;
     } catch (error) {
       console.error('[MODEL 2] Error:', error);
@@ -949,16 +967,14 @@ Maximum 5 red flags. Empty array if none detected.`
         console.log(`[CACHE HIT] Scripts for "${obj.text?.substring(0, 30)}..." → mapping to ${obj.id}`);
         
         // RE-KEY cached scripts to match current objection ID
-        // Original might be obj1_1, obj1_2... but current obj.id might be obj2
         const originalScripts = cached.scripts;
-        const originalObjId = cached.originalObjId || 'obj1'; // Store original ID when caching
         
-        for (const [scriptKey, script] of Object.entries(originalScripts)) {
-          // Replace original objId with current objId in the key
-          // e.g., obj1_1 → obj2_1 if current objection is obj2
-          const suffix = scriptKey.replace(originalObjId, ''); // Gets "_1", "_2", etc.
-          const newKey = `${obj.id}${suffix}`;
+        // Generate new keys based on current objection ID
+        let scriptIndex = 1;
+        for (const [_, script] of Object.entries(originalScripts)) {
+          const newKey = `${obj.id}_${scriptIndex}`;
           cachedScripts[newKey] = script;
+          scriptIndex++;
         }
       } else {
         newObjections.push(obj);
@@ -1095,27 +1111,29 @@ IMPORTANT:
       const result = JSON.parse(content);
       const newScripts = result.objectionScripts || {};
 
-      // Cache new scripts by objection hash (include original objId for re-keying later)
+      // Cache new scripts by objection hash - store scripts as array for easy re-keying
       for (const obj of newObjections) {
         const hash = this.getObjectionHash(obj);
         // Collect all scripts for this objection (obj1_1, obj1_2, etc.)
-        const objScripts: Record<string, any> = {};
+        const objScriptsArray: any[] = [];
         for (const [scriptId, script] of Object.entries(newScripts)) {
-          if (scriptId.startsWith(obj.id)) {
-            objScripts[scriptId] = script;
+          if (scriptId.startsWith(`${obj.id}_`)) {
+            objScriptsArray.push(script);
           }
         }
-        // Cache all scripts WITH the original objection ID for re-keying
-        this.scriptCache.set(hash, { 
-          scripts: objScripts, 
-          originalObjId: obj.id  // Store original ID for re-keying
-        });
-        console.log(`[CACHE SET] Cached ${Object.keys(objScripts).length} scripts for "${obj.text?.substring(0, 30)}..." (${obj.id})`);
+        // Cache scripts as array for easy re-keying later
+        if (objScriptsArray.length > 0) {
+          this.scriptCache.set(hash, { 
+            scripts: Object.fromEntries(objScriptsArray.map((s, i) => [`_${i+1}`, s])),
+          });
+          console.log(`[CACHE SET] Cached ${objScriptsArray.length} scripts for "${obj.text?.substring(0, 30)}..." (${obj.id})`);
+        }
       }
 
       // Merge cached + new scripts and return
-      console.log(`[SCRIPTS] Returning ${Object.keys(cachedScripts).length} cached + ${Object.keys(newScripts).length} new scripts`);
-      return { ...cachedScripts, ...newScripts };
+      const allScripts = { ...cachedScripts, ...newScripts };
+      console.log(`[SCRIPTS] Returning ${Object.keys(allScripts).length} total scripts:`, Object.keys(allScripts));
+      return allScripts;
     } catch (error) {
       console.error('Error in script generation model:', error);
       return {};
