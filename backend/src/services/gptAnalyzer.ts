@@ -372,7 +372,7 @@ export class GPTConversationAnalyzer {
         return result;
       });
 
-      // Model 3: Scripts - Waits for objections, then generates 3 scripts per objection
+      // Model 3: Scripts - Waits for objections, then generates 1 script per objection
       const scriptsPromise = objectionsPromise.then(objections => {
         if (!objections || objections.length === 0) {
           console.log(`[MODEL 3 - SCRIPTS] No objections, skipping`);
@@ -647,7 +647,7 @@ Return empty array if NO objections found: {"objections": []}`
 
   // ============================================================
   // MODEL 3: PERSONALIZED HANDLING SCRIPTS
-  // Generates 3 scripts per objection - CACHED
+  // Generates 1 script per objection - CACHED
   // ============================================================
   private async analyzeModel3_Scripts(transcript: string, objections: any[]): Promise<Record<string, any>> {
     return this.generateObjectionScriptsModel(transcript, objections);
@@ -989,7 +989,7 @@ Return empty array if NO red flags: {"redFlags": []}`
   }
 
   // Model 3: Generate Personalized Handling Scripts (separate model)
-  // Generates 3 scripts per detected objection - CACHED to avoid regeneration
+  // Generates 1 script per detected objection - CACHED to avoid regeneration
   private async generateObjectionScriptsModel(transcript: string, objections: any[]): Promise<Record<string, any>> {
     // If no objections, return empty
     if (!objections || objections.length === 0) {
@@ -1076,28 +1076,26 @@ RETURN JSON:
       "truthLevel": 78,
       "moneyStyle": "...",
       "steps": [...]
-    },
-    "[objectionId]_2": { ... },
-    "[objectionId]_3": { ... }
+    }
   }
 }
 
-Generate EXACTLY 3 scripts per objection. Keys must be: objId_1, objId_2, objId_3.`
+Generate EXACTLY 1 script per objection. Key must be: objId_1.`
           },
           {
             role: 'user',
             content: `⚠️ THESE ARE THE EXACT OBJECTIONS - use these exact texts as titles:\n${newObjections.map(o => `- ID: ${o.id}, TEXT: "${o.text}"`).join('\n')}\n\n---\nCONVERSATION CONTEXT:\n${transcript}\n---\n\nGENERATE SCRIPTS FOR THESE EXACT OBJECTIONS:
-${newObjections.map(o => `• "${o.text}" → Generate scripts: ${o.id}_1, ${o.id}_2, ${o.id}_3`).join('\n')}
+${newObjections.map(o => `• "${o.text}" → Generate script: ${o.id}_1`).join('\n')}
 
 CRITICAL:
 - The script TITLE must be the EXACT objection text from above
 - Do NOT invent different objections - use EXACTLY what was detected
-- 3 scripts per objection
+- 1 script per objection
 - Personalize based on conversation context`
           }
         ],
         temperature: 0.3,
-        max_tokens: 4000,
+        max_tokens: 2500,
         response_format: { type: 'json_object' }
       });
 

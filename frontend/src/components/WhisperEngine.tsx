@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { MessageSquare, Sparkles } from 'lucide-react';
 import { Objection, ScriptStep } from '../types';
 
@@ -17,11 +16,8 @@ export default function WhisperEngine({
   scripts,
   onObjectionClick,
 }: WhisperEngineProps) {
-  const [activeScriptIndex, setActiveScriptIndex] = useState(0);
-
   const handleObjectionClick = (id: string) => {
     onSelectObjection(id);
-    setActiveScriptIndex(0); // Reset to first script when changing objection
     if (onObjectionClick) {
       onObjectionClick(id);
     }
@@ -45,7 +41,7 @@ export default function WhisperEngine({
     return 'bg-gradient-to-r from-blue-500 to-indigo-500';
   };
 
-  const currentScript = scripts[activeScriptIndex];
+  const script = scripts[0];
 
   return (
     <div className="relative">
@@ -77,7 +73,7 @@ export default function WhisperEngine({
 
         <p className="text-teal-300/80 mb-6 flex items-center gap-2">
           <span className="text-cyan-400">👆</span>
-          Click an objection to see personalized handling scripts:
+          Click an objection to see personalized handling script:
         </p>
 
         <div className="space-y-3 mb-8">
@@ -110,46 +106,29 @@ export default function WhisperEngine({
           ))}
         </div>
 
-        {scripts.length > 0 && currentScript ? (
+        {script ? (
           <div className="animate-slide-up border-t border-teal-400/20 pt-6">
-            {/* Script Tabs */}
-            <div className="flex gap-2 mb-4">
-              {scripts.map((_, index) => (
-                <button
-                  key={index}
-                  onClick={() => setActiveScriptIndex(index)}
-                  className={`px-4 py-2 rounded-lg font-semibold transition-all duration-200 ${
-                    activeScriptIndex === index
-                      ? 'bg-gradient-to-r from-teal-500 to-cyan-500 text-white shadow-lg shadow-teal-500/30'
-                      : 'bg-gray-800/60 text-teal-300/70 hover:bg-gray-700/60 hover:text-teal-300 border border-teal-400/20'
-                  }`}
-                >
-                  Script {index + 1}
-                </button>
-              ))}
-            </div>
-
             <div className="bg-gradient-to-br from-teal-500/10 to-cyan-500/10 border border-teal-400/40 rounded-2xl p-6 glow-teal">
               <div className="flex items-start gap-3 mb-4">
                 <MessageSquare className="w-6 h-6 text-teal-400 mt-1 flex-shrink-0" />
                 <div>
-                  <h3 className="text-xl font-bold text-teal-300 mb-1">{currentScript.title}</h3>
+                  <h3 className="text-xl font-bold text-teal-300 mb-1">{script.title}</h3>
                   <div className="text-sm space-y-1">
                     <p className="text-cyan-400">
-                      <span className="text-white/60">Trigger:</span> {currentScript.dialTrigger}
+                      <span className="text-white/60">Trigger:</span> {script.dialTrigger}
                     </p>
                     <p className="text-cyan-400">
-                      <span className="text-white/60">Truth Level:</span> {currentScript.truthLevel}%
+                      <span className="text-white/60">Truth Level:</span> {script.truthLevel}%
                     </p>
                     <p className="text-cyan-400">
-                      <span className="text-white/60">Money Style:</span> {currentScript.moneyStyle}
+                      <span className="text-white/60">Money Style:</span> {script.moneyStyle}
                     </p>
                   </div>
                 </div>
               </div>
 
               <div className="space-y-4 mt-6">
-                {currentScript.steps?.map((step: ScriptStep) => (
+                {script.steps?.map((step: ScriptStep) => (
                   <div key={step.step} className="bg-gray-900/60 rounded-lg p-4 border border-teal-400/20">
                     <div className="flex items-start gap-3">
                       <span className="text-teal-400 font-bold text-lg flex-shrink-0">
@@ -180,7 +159,7 @@ export default function WhisperEngine({
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <MessageSquare className="w-16 h-16 text-teal-400/30 mb-4" />
               <p className="text-white/50 text-lg">
-                Select an objection above to see your personalized handling scripts
+                Select an objection above to see your personalized handling script
               </p>
             </div>
           </div>
