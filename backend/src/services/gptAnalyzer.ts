@@ -183,9 +183,9 @@ COLOR GUIDELINES FOR PSYCHOLOGICAL DIALS (IMPORTANT - NO BLACK/GREY):
       "truthLevel": 78,
       "moneyStyle": "Investment-minded, seeks premium solutions",
       "steps": [
-        { "step": 1, "text": "I totally get that... and thank you for being honest with me.", "pause": "1s" },
-        { "step": 2, "text": "Based on what you shared earlier, this isn't really about needing time to think...", "pause": "1.5s", "note": "Reference specific conversation details" },
-        ... (5-8 steps total with personalized text, pauses, and notes)
+        { "step": 1, "text": "I totally get that... and thank you for being honest with me.", "pause": "1s", "note": "Acknowledge their concern" },
+        { "step": 2, "text": "Based on what you shared earlier, this isn't really about needing time to think...", "pause": "1.5s", "note": "Reference specific conversation details" }
+      ] (EXACTLY 2 steps only)
       ]
     },
     ... (generate a script for EACH detected objection, keyed by objection id)
@@ -199,9 +199,9 @@ For EACH objection detected, generate a personalized handling script using the I
 2. Dial Trigger: List the psychological dials/hot buttons that triggered this objection (e.g., "Commitment to Decide + Validation Seeker")
 3. Truth Level: Use the Truth Index score (estimate 70-85 if not calculated, or based on indicator coherence)
 4. Money Style: Based on money-related indicators (P4) - e.g., "Investment-minded", "Price-sensitive", "Resourceful", "Has capital, questions ROI"
-5. Steps: 5-8 conversation steps with:
-   - step: Sequential number (1, 2, 3...)
-   - text: What to say - PERSONALIZE based on actual conversation context, use techniques from CSV (PEARL prompts, David/Calvin/Carone approaches)
+5. Steps: EXACTLY 2 conversation steps with:
+   - step: Sequential number (1, 2)
+   - text: What to say - PERSONALIZE based on actual conversation context
    - pause: Optional pause time (e.g., "1s", "2s", "1.5s") - use strategically
    - note: Optional coaching note (e.g., "Wait for response", "This is the pivot moment", "Let them answer")
 
@@ -1070,8 +1070,8 @@ For EACH DETECTED OBJECTION, create a script with:
 2. Dial Trigger: Which psychological patterns triggered this
 3. Truth Level: 70-85 based on conversation
 4. Money Style: "Investment-minded", "Price-sensitive", etc.
-5. Steps: 5-8 conversation steps with:
-   - step: Sequential number
+5. Steps: EXACTLY 2 conversation steps with:
+   - step: Sequential number (1, 2)
    - text: What to say - PERSONALIZE based on conversation
    - pause: Optional ("1s", "2s")
    - note: Coaching note in natural language
@@ -1214,7 +1214,7 @@ For EACH objection provided, create a script with:
 2. Dial Trigger: Which psychological patterns triggered this (e.g., "Commitment to Decide + Validation Seeker")
 3. Truth Level: Estimate 70-85 based on conversation authenticity
 4. Money Style: Based on money-related indicators - "Investment-minded", "Price-sensitive", "Resourceful", etc.
-5. Steps: 5-8 conversation steps with step number, text (what to say), optional pause, optional note
+5. Steps: EXACTLY 2 conversation steps with step number, text (what to say), optional pause, optional note
 
 Script style:
 - Reference specific things the prospect said
