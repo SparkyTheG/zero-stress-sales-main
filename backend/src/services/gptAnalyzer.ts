@@ -1034,105 +1034,65 @@ Return empty array if NO red flags: {"redFlags": []}`
         messages: [
           {
             role: 'system',
-            content: `You are an expert sales script writer. Analyze the conversation and generate personalized objection handling scripts based on objection patterns that appear or are likely to appear.
+            content: `You are an expert sales script writer. Generate personalized handling scripts for SPECIFIC objections.
 
-OBJECTION HANDLING TECHNIQUES (use these APPROACHES as inspiration, but generate YOUR OWN natural descriptions):
-- Use open-ended questions that guide self-discovery (inspired by PEARL approach)
-- Ask questions that help them realize the answer themselves (inspired by Self-led Insight approach)
-- Challenge their patterns/thinking when appropriate (inspired by Pattern Interrupt approach)
-- Use direct, bold statements that cut through when needed (inspired by Direct Challenge approach)
+⚠️ CRITICAL RULE: You will receive a list of DETECTED OBJECTIONS. You MUST generate scripts for THOSE EXACT OBJECTIONS.
+- Use the EXACT objection text as the title
+- Do NOT substitute with different objections
+- Do NOT use examples from training - use the ACTUAL objections passed to you
 
-IMPORTANT: DO NOT copy technique names like "PEARL Prompt" or "David (Self-led Insight)" into your notes. Instead, generate YOUR OWN natural, descriptive notes that explain what the step accomplishes (e.g., "Open up the conversation with a thoughtful question", "Guide them to discover the solution themselves", "Challenge their limiting belief", "Pause and wait for their response").
+SCRIPT WRITING TECHNIQUES (use as inspiration, write YOUR OWN notes):
+- Open-ended questions that guide self-discovery
+- Questions that help them realize the answer themselves  
+- Challenge their patterns/thinking when appropriate
+- Direct, bold statements when needed
 
-COMMON OBJECTIONS (from CSV - generate scripts for objections that appear in conversation):
-1. "Things aren't that bad right now" (Pain Awareness - Indicator 1)
-2. "I'm not even sure what I'd want instead" (Desire Clarity - Indicator 2)
-3. "This is on the back burner for now" (Desire Priority - Indicator 3)
-4. "I've lived with it for years" (Duration - Indicator 4)
-5. "I'm not on a deadline" (Time Pressure - Indicator 5)
-6. "I'll revisit this later" (Cost of Delay - Indicator 6)
-7. "I'm not ready to decide" (Internal Timing - Indicator 7)
-8. "It's a crazy time" (Environmental Availability - Indicator 8)
-9. "I need to check with my partner" (Decision Authority - Indicator 9)
-10. "I usually take time to reflect" (Decision Style - Indicator 10)
-11. "Can I sleep on it?" (Commitment - Indicator 11)
-12. "What if I fail?" (Self-Permission - Indicator 12)
-13. "I don't have the funds" (Resource Access - Indicator 13)
-14. "Our budget's frozen" (Resource Fluidity - Indicator 14)
-15. "Not sure it's worth it" (Investment Mindset - Indicator 15)
-16. "I can't make this work" (Resourcefulness - Indicator 16)
-17. "It's not really my fault" (Problem Recognition - Indicator 17)
-18. "Will this really work for me?" (Solution Ownership - Indicator 18)
-19. "If I get lucky, maybe" (Locus of Control - Indicator 19)
-20. "I want it, but..." (Integrity - Indicator 20)
-21. "I'm anxious about spending this" (Emotional Spending - Indicator 21)
-22. "Can you discount this?" (Negotiation - Indicator 22)
-23. "I want it my way" (Structural Rigidity - Indicator 23)
-24. "This should pay for itself, right?" (ROI Ownership - Indicator 24)
-25. "I haven't seen enough proof" (External Trust - Indicator 25)
-26. "I'm not sure I can follow through" (Internal Trust - Indicator 26)
-27. "I don't want to make a mistake" (Risk Tolerance - Indicator 27)
-
-For EACH objection that appears in the conversation (or is strongly implied), create a personalized script with:
-1. Title: The objection text in quotes
-2. Dial Trigger: Which psychological patterns/hot buttons triggered this (e.g., "Commitment to Decide + Validation Seeker")
-3. Truth Level: Estimate 70-85 based on conversation authenticity
-4. Money Style: Based on money-related patterns - "Investment-minded", "Price-sensitive", "Resourceful", "Has capital, questions ROI"
+For EACH DETECTED OBJECTION, create a script with:
+1. Title: The EXACT objection text in quotes (copy from input)
+2. Dial Trigger: Which psychological patterns triggered this
+3. Truth Level: 70-85 based on conversation
+4. Money Style: "Investment-minded", "Price-sensitive", etc.
 5. Steps: 5-8 conversation steps with:
-   - step: Sequential number (1, 2, 3...)
-   - text: What to say - PERSONALIZE based on actual conversation context, reference specific things the prospect said
-   - pause: Optional pause time (e.g., "1s", "2s", "1.5s") - use strategically
-   - note: Optional coaching note - Write YOUR OWN natural description (e.g., "Wait for response", "This is the pivot moment", "Let them answer", "Open up the conversation", "Guide them to discover the solution"). DO NOT copy technique names from CSV.
+   - step: Sequential number
+   - text: What to say - PERSONALIZE based on conversation
+   - pause: Optional ("1s", "2s")
+   - note: Coaching note in natural language
 
 Script requirements:
-- Reference specific things the prospect said in the conversation
-- Use the CSV technique APPROACHES as inspiration, but write YOUR OWN natural, descriptive notes
-- Be personalized and contextual
+- Title MUST match the exact objection text passed to you
+- Reference what the prospect actually said
+- Personalize based on conversation context
 - Guide through objection to resolution
-- End with a clear close or next step
-- Notes should describe WHAT the step does, not name the technique (e.g., write "Help them see the value themselves" instead of "David (Self-led Insight)")
 
-Return ONLY a JSON object:
+RETURN JSON:
 {
   "objectionScripts": {
-    "obj1_1": {
-      "title": "\\"Can I sleep on it?\\"",
-      "dialTrigger": "Commitment to Decide + Validation Seeker",
+    "[objectionId]_1": {
+      "title": "[EXACT objection text from input]",
+      "dialTrigger": "...",
       "truthLevel": 78,
-      "moneyStyle": "Investment-minded, seeks premium solutions",
-      "steps": [
-        { "step": 1, "text": "I totally get that... and thank you for being honest with me.", "pause": "1s" },
-        { "step": 2, "text": "Based on what you shared earlier about [specific detail], this isn't really about needing time to think...", "pause": "1.5s", "note": "Reference specific conversation details and wait for their response" },
-        ...
-      ]
+      "moneyStyle": "...",
+      "steps": [...]
     },
-    "obj1_2": { ... },
-    "obj1_3": { ... },
-    "obj1_4": { ... },
-    "obj1_5": { ... },
-    "obj2_1": { ... },
-    ...
+    "[objectionId]_2": { ... },
+    "[objectionId]_3": { ... },
+    "[objectionId]_4": { ... },
+    "[objectionId]_5": { ... }
   }
 }
 
-Generate scripts for objections that appear in the conversation. 
-
-CRITICAL: For EACH objection, generate EXACTLY 5 different personalized handling script variations (5 scripts per objection). 
-
-Key naming: For objection "obj1", generate keys "obj1_1", "obj1_2", "obj1_3", "obj1_4", "obj1_5". For objection "obj2", generate "obj2_1", "obj2_2", "obj2_3", "obj2_4", "obj2_5", etc.
-
-Each script variation should use a different approach/technique to handle the same objection - vary the steps, tone, and strategy. If there are 3 objections, you should generate 15 scripts total (5 per objection).`
+Generate EXACTLY 5 scripts per objection. Keys must be: objId_1, objId_2, objId_3, objId_4, objId_5.`
           },
           {
             role: 'user',
-            content: `DETECTED OBJECTIONS:\n${JSON.stringify(newObjections, null, 2)}\n\n---\nCONVERSATION:\n${transcript}\n---\n\nGenerate personalized objection handling scripts for the detected objections above. For EACH objection, generate EXACTLY 5 different script variations.
+            content: `⚠️ THESE ARE THE EXACT OBJECTIONS - use these exact texts as titles:\n${newObjections.map(o => `- ID: ${o.id}, TEXT: "${o.text}"`).join('\n')}\n\n---\nCONVERSATION CONTEXT:\n${transcript}\n---\n\nGENERATE SCRIPTS FOR THESE EXACT OBJECTIONS:
+${newObjections.map(o => `• "${o.text}" → Generate scripts: ${o.id}_1, ${o.id}_2, ${o.id}_3, ${o.id}_4, ${o.id}_5`).join('\n')}
 
-IMPORTANT: 
-- Use the CSV techniques as INSPIRATION for your approach
-- Generate YOUR OWN natural, descriptive notes - do NOT copy technique names like "PEARL Prompt" or "David (Self-led Insight)"
-- Write notes that explain what each step accomplishes in natural language
-- Personalize based on what the prospect actually said
-- Generate 5 scripts per objection using the key naming: obj1_1, obj1_2, obj1_3, obj1_4, obj1_5, obj2_1, obj2_2, etc.`
+CRITICAL:
+- The script TITLE must be the EXACT objection text from above
+- Do NOT invent different objections - use EXACTLY what was detected
+- 5 scripts per objection
+- Personalize based on conversation context`
           }
         ],
         temperature: 0.3,
