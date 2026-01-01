@@ -145,10 +145,7 @@ function App() {
   }, []);
 
   const handleObjectionClick = (objectionId: string) => {
-    const objectionElement = document.getElementById(`objection-${objectionId}`);
-    if (objectionElement) {
-      objectionElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
+    // Disabled auto-scroll - user requested no scrolling on click
   };
 
   const handleSelectCall = (callId: string) => {
