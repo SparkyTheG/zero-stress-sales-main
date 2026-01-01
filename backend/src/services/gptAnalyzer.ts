@@ -537,28 +537,27 @@ P7 (24-27): "from-cyan-500 to-teal-500"`
         messages: [
           {
             role: 'system',
-            content: `You are an objection detector. Find COMPLETE objections from the conversation.
+            content: `You are an objection detector. Find hesitations, concerns, and objections in the conversation.
 
-CRITICAL RULES:
-1. ONLY return COMPLETE sentences/phrases - never partial or cut-off phrases
-2. Each objection must be at least 4 words and be a complete thought
-3. DO NOT duplicate - if someone says "I am confused about this", don't also include "I am confused"
-4. If the same idea is expressed multiple times, include it ONLY ONCE
-5. Use their ACTUAL words but ensure it's a complete statement
+RULES:
+1. Extract the prospect's ACTUAL words (complete phrases, not fragments)
+2. Include both explicit objections AND implied concerns
+3. Each objection should be unique (no duplicates)
 
-OBJECTION CATEGORIES:
-1. PAIN/DESIRE: "Things aren't that bad" / "It's not urgent" / "I'm managing fine"
-2. TIMING: "I'm not in a rush" / "I'll think about it later" / "Bad timing"
-3. DECISION: "I need to ask my partner" / "Let me sleep on it" / "I'm not sure"
-4. MONEY: "Too expensive" / "Can't afford it" / "Need to check finances"
-5. TRUST: "I've tried things before" / "What's the guarantee?" / "What if I fail?"
+OBJECTION TYPES TO LOOK FOR:
+- Confusion: "I'm confused", "I don't understand", "What do you mean?"
+- Hesitation: "I'm not sure", "I need to think", "Maybe later"
+- Money concerns: "It's expensive", "I can't afford it", "Need to check budget"
+- Time concerns: "I'm busy", "Not a good time", "No rush"
+- Trust concerns: "Will this work?", "What if it fails?", "I've tried before"
+- Decision concerns: "Need to ask my spouse", "Not just my decision"
 
-RETURN JSON (only unique, complete objections):
+RETURN JSON:
 {"objections": [
-  {"id": "obj1", "text": "complete sentence they said", "probability": 85, "indicator": 11}
+  {"id": "obj1", "text": "what they said", "probability": 75, "indicator": 11}
 ]}
 
-If there are NO clear objections, return: {"objections": []}`
+Return empty array if NO objections found: {"objections": []}`
           },
           {
             role: 'user',
@@ -571,16 +570,20 @@ If there are NO clear objections, return: {"objections": []}`
       });
 
       const content = response.choices[0]?.message?.content;
-      if (!content) return [];
+      if (!content) {
+        console.log('[MODEL 2] No content from GPT');
+        return [];
+      }
       
       const result = JSON.parse(content);
       let objections = result.objections || [];
+      console.log(`[MODEL 2] GPT returned ${objections.length} raw objections`);
       
-      // Step 1: Filter out objections that are too short (less than 4 words)
+      // Step 1: Filter out objections that are too short (less than 3 words)
       objections = objections.filter((obj: any) => {
         const text = (obj.text || '').trim();
         const wordCount = text.split(/\s+/).filter((w: string) => w.length > 0).length;
-        if (wordCount < 4) {
+        if (wordCount < 3) {
           console.log(`[MODEL 2] Filtering too short: "${text}" (${wordCount} words)`);
           return false;
         }
@@ -588,14 +591,15 @@ If there are NO clear objections, return: {"objections": []}`
       });
       
       // Step 2: Remove objections that are substrings of other objections
+      const afterLengthFilter = [...objections];
       objections = objections.filter((obj: any, index: number) => {
         const text = (obj.text || '').toLowerCase().trim();
-        for (let i = 0; i < objections.length; i++) {
+        for (let i = 0; i < afterLengthFilter.length; i++) {
           if (i !== index) {
-            const otherText = (objections[i].text || '').toLowerCase().trim();
+            const otherText = (afterLengthFilter[i].text || '').toLowerCase().trim();
             // If this text is contained within a longer objection, filter it out
-            if (otherText.length > text.length && otherText.includes(text)) {
-              console.log(`[MODEL 2] Filtering substring: "${obj.text}" is part of "${objections[i].text}"`);
+            if (otherText.length > text.length + 5 && otherText.includes(text)) {
+              console.log(`[MODEL 2] Filtering substring: "${obj.text}" is part of "${afterLengthFilter[i].text}"`);
               return false;
             }
           }
@@ -603,19 +607,20 @@ If there are NO clear objections, return: {"objections": []}`
         return true;
       });
       
-      // Step 3: Remove objections with very similar content (>80% overlap)
+      // Step 3: Remove near-identical objections (>90% overlap)
       const uniqueObjections: any[] = [];
       for (const obj of objections) {
         const text = (obj.text || '').toLowerCase().trim();
         const isDuplicate = uniqueObjections.some(existing => {
           const existingText = (existing.text || '').toLowerCase().trim();
-          // Check if texts share >80% of words
-          const textWords = new Set(text.split(/\s+/).filter((w: string) => w.length > 2));
-          const existingWords = new Set(existingText.split(/\s+/).filter((w: string) => w.length > 2));
+          // Check if texts are nearly identical
+          const textWords = new Set(text.split(/\s+/).filter((w: string) => w.length > 1));
+          const existingWords = new Set(existingText.split(/\s+/).filter((w: string) => w.length > 1));
           const intersection = [...textWords].filter(w => existingWords.has(w)).length;
-          const similarity = intersection / Math.max(textWords.size, existingWords.size);
-          if (similarity > 0.8) {
-            console.log(`[MODEL 2] Filtering similar (${(similarity * 100).toFixed(0)}%): "${obj.text}" ~ "${existing.text}"`);
+          const minSize = Math.min(textWords.size, existingWords.size);
+          const similarity = minSize > 0 ? intersection / minSize : 0;
+          if (similarity > 0.9) {
+            console.log(`[MODEL 2] Filtering near-duplicate (${(similarity * 100).toFixed(0)}%): "${obj.text}"`);
             return true;
           }
           return false;
