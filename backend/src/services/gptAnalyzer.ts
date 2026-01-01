@@ -528,7 +528,7 @@ P7 (24-27): "from-cyan-500 to-teal-500"`
 
   // ============================================================
   // MODEL 2: OBJECTIONS DETECTION (from 27 Indicator CSV)
-  // Detects objections mapped to the 27 indicators
+  // Detects objections mapped to the 27 indicators - ALWAYS returns up to 5
   // ============================================================
   private async analyzeModel2_Objections(transcript: string): Promise<any[]> {
     try {
@@ -537,56 +537,56 @@ P7 (24-27): "from-cyan-500 to-teal-500"`
         messages: [
           {
             role: 'system',
-            content: `You are an objection detector. Extract ALL objections from the conversation.
+            content: `You are an objection detector. Your job is to find ALL potential objections and concerns in the conversation.
 
-OBJECTIONS BY INDICATOR (from CSV - detect if expressed):
-1. "Things aren't that bad right now" → Pain Awareness (indicator 1)
-2. "I'm not even sure what I'd want instead" → Desire Clarity (indicator 2)
-3. "This is on the back burner for now" → Desire Priority (indicator 3)
-4. "I've lived with it for years" → Duration (indicator 4)
-5. "I'm not on a deadline" → Time Pressure (indicator 5)
-6. "I'll revisit this later" → Cost of Delay (indicator 6)
-7. "I'm not ready to decide" → Internal Timing (indicator 7)
-8. "It's a crazy time" → Environmental Availability (indicator 8)
-9. "I need to check with my partner/spouse/boss" → Decision Authority (indicator 9)
-10. "I usually take time to reflect" → Decision Style (indicator 10)
-11. "Can I sleep on it?" / "I need to think about it" → Commitment (indicator 11)
-12. "What if I fail?" → Self-Permission (indicator 12)
-13. "I don't have the funds" / "I don't have the budget" → Resource Access (indicator 13)
-14. "Our budget's frozen" → Resource Fluidity (indicator 14)
-15. "Not sure it's worth it" → Investment Mindset (indicator 15)
-16. "I can't make this work" → Resourcefulness (indicator 16)
-17. "It's not really my fault" → Problem Recognition (indicator 17)
-18. "Will this really work for me?" → Solution Ownership (indicator 18)
-19. "If I get lucky, maybe" → Locus of Control (indicator 19)
-20. "I want it, but..." → Integrity (indicator 20)
-21. "I'm anxious about spending this" / "It's too expensive" → Emotional Spending (indicator 21)
-22. "Can you discount this?" → Negotiation Reflex (indicator 22)
-23. "I want it my way" → Structural Rigidity (indicator 23)
-24. "This should pay for itself, right?" → ROI Ownership (indicator 24)
-25. "I haven't seen enough proof" → External Trust (indicator 25)
-26. "I'm not sure I can follow through" → Internal Trust (indicator 26)
-27. "I don't want to make a mistake" → Risk Tolerance (indicator 27)
+IMPORTANT: Always try to find 3-5 objections. Look for both explicit objections AND implied hesitations.
+
+OBJECTION CATEGORIES (detect similar phrases):
+1. PAIN/DESIRE OBJECTIONS:
+   - "Things aren't that bad" / "It's not urgent" / "I'm managing fine"
+   - "I'm not sure what I want" / "I haven't thought about it"
+   - "This isn't a priority" / "Maybe later"
+
+2. TIMING/URGENCY OBJECTIONS:
+   - "I'm not in a rush" / "No deadline"
+   - "I'll think about it later" / "Not the right time"
+   - "It's a busy period" / "Bad timing"
+
+3. DECISION OBJECTIONS:
+   - "I need to ask my partner/spouse/boss" / "Not just my decision"
+   - "I need to think about it" / "Let me sleep on it"
+   - "I'm not sure" / "What if it doesn't work?"
+
+4. MONEY OBJECTIONS:
+   - "I don't have the budget" / "Too expensive" / "Can't afford it"
+   - "Is there a discount?" / "Can you do better on price?"
+   - "I need to check my finances"
+
+5. TRUST/RISK OBJECTIONS:
+   - "I'm not sure it'll work for me" / "I've tried things before"
+   - "I need more proof" / "What's the guarantee?"
+   - "What if I fail?" / "I'm worried about..."
 
 RULES:
-- Extract EVERY objection you detect (up to 5)
-- Use the prospect's ACTUAL words or close paraphrase
-- Map each to the closest indicator
-- Include probability (how confident you are it's an objection)
+- Find 3-5 objections minimum (look for subtle hesitations too)
+- Use their ACTUAL words when possible
+- Assign probability 60-95 based on how explicit the objection is
+- Map to indicator number (1-27)
 
-RETURN JSON:
+RETURN JSON with 3-5 objections:
 {"objections": [
-  {"id": "obj1", "text": "I need to think about it", "probability": 95, "indicator": 11},
-  {"id": "obj2", "text": "I don't have the budget right now", "probability": 90, "indicator": 13}
+  {"id": "obj1", "text": "exact words they said", "probability": 85, "indicator": 11},
+  {"id": "obj2", "text": "another concern", "probability": 75, "indicator": 13},
+  {"id": "obj3", "text": "implied hesitation", "probability": 65, "indicator": 9}
 ]}`
           },
           {
             role: 'user',
-            content: transcript
+            content: `Analyze this conversation and find 3-5 objections or concerns:\n\n${transcript}`
           }
         ],
-        temperature: 0.2,
-        max_tokens: 600,
+        temperature: 0.3,
+        max_tokens: 800,
         response_format: { type: 'json_object' }
       });
 
@@ -766,7 +766,7 @@ RETURN JSON:
 
   // ============================================================
   // MODEL 5: TRUTH INDEX (Incoherence Detection - CSV Rules)
-  // Detects contradictions using EXACT rules from Truth Index CSV
+  // Detects contradictions and calculates truth/authenticity score
   // ============================================================
   private async analyzeModel5_TruthIndex(transcript: string): Promise<any> {
     try {
@@ -775,89 +775,79 @@ RETURN JSON:
         messages: [
           {
             role: 'system',
-            content: `You are a truth/coherence analyzer. Detect INCOHERENCE using EXACT CSV rules.
+            content: `You are a truth/authenticity analyzer. Analyze the conversation for honesty and coherence.
 
-Score the relevant pillars first, then apply penalty rules.
+YOUR TASK: Score how authentic and coherent the prospect's responses are (0-100).
 
-PILLAR SCORING (1-10):
-- P1: Pain/Desire (average of indicators 1-4)
-- P2: Urgency (average of indicators 5-8)
-- P3: Decisiveness (average of indicators 9-12)
-- P4: Available Money (average of indicators 13-16)
-- P5: Responsibility (average of indicators 17-20)
-- P6: Price Sensitivity RAW (average of indicators 21-23, NOT reversed)
+SCORING FACTORS:
 
-TRUTH INDEX PENALTY RULES (from CSV):
+POSITIVE SIGNALS (increase score):
+- Specific details and examples (+5-15)
+- Admitting weaknesses or concerns (+5-10)
+- Consistent messaging throughout (+5-10)
+- Emotional authenticity (+5-10)
+- Taking ownership of problems (+5-10)
 
-T1: High Pain + Low Urgency
-- Condition: P1 ≥ 7 AND P2 ≤ 4
-- Penalty: -15 points
-- Meaning: Claims deep pain but no urgency to act
+NEGATIVE SIGNALS (decrease score):
+- Vague or evasive answers (-10-20)
+- Contradictions in statements (-15-20)
+- Says one thing, implies another (-10-15)
+- External blame patterns (-10-15)
+- People-pleasing responses (-5-10)
 
-T2: High Desire + Low Decisiveness  
-- Condition: (Desire Clarity OR Desire Priority) ≥ 7 AND P3 ≤ 4
-- Penalty: -15 points
-- Meaning: Wants change but avoids decision
+INCOHERENCE PENALTIES (from CSV):
+T1: Claims HIGH PAIN but shows LOW URGENCY → -15
+T2: Wants CHANGE but avoids DECISION → -15  
+T3: Has MONEY but resists PRICE strongly → -10
+T4: Claims AUTHORITY but needs APPROVAL → -10
+T5: Desires RESULT but won't OWN responsibility → -15
 
-T3: High Money + High Price Sensitivity
-- Condition: P4 ≥ 7 AND P6 raw ≥ 8
-- Penalty: -10 points
-- Meaning: Can afford it but still resists price
-
-T4: Claims Authority + Needs Approval
-- Condition: Says they're the decision maker BUT mentions needing approval
-- Penalty: -10 points
-- Meaning: Self-contradiction in who owns decision
-
-T5: High Desire + Low Responsibility
-- Condition: (Desire Clarity OR Priority) ≥ 7 AND P5 ≤ 5
-- Penalty: -15 points
-- Meaning: Craves result but doesn't own the change
-
-STARTING SCORE: 100
-Apply penalties for each triggered rule.
+BASE SCORE: Start at 70, then adjust based on signals detected.
+- Very authentic: 80-100
+- Mostly honest: 60-79
+- Mixed signals: 40-59
+- Defensive/evasive: 20-39
+- Highly inconsistent: 0-19
 
 RETURN JSON:
 {
-  "pillarScores": {"P1": 7, "P2": 4, "P3": 5, "P4": 6, "P5": 5, "P6_raw": 7},
-  "score": 85,
+  "score": 72,
   "penalties": [
     {"rule": "T1", "description": "High Pain + Low Urgency", "points": -15, "triggered": true}
   ],
-  "explanation": "Claims significant pain but shows no urgency"
+  "positiveSignals": ["Gave specific examples about their situation", "Admitted budget concerns openly"],
+  "negativeSignals": ["Vague about timeline"],
+  "explanation": "Mostly authentic with some hesitation around commitment"
 }`
           },
           {
             role: 'user',
-            content: transcript
+            content: `Analyze the authenticity and coherence of this conversation:\n\n${transcript}`
           }
         ],
-        temperature: 0.2,
-        max_tokens: 600,
+        temperature: 0.3,
+        max_tokens: 700,
         response_format: { type: 'json_object' }
       });
 
       const content = response.choices[0]?.message?.content;
-      if (!content) return { score: 100, penalties: [], explanation: 'No analysis' };
+      if (!content) return { score: 70, penalties: [], explanation: 'No analysis' };
       
       const result = JSON.parse(content);
       
-      // Calculate final score from triggered penalties
-      let finalScore = 100;
-      const triggeredPenalties = (result.penalties || []).filter((p: any) => p.triggered !== false);
-      for (const penalty of triggeredPenalties) {
-        finalScore += penalty.points; // points are negative
-      }
+      // Use the AI-calculated score directly (it already accounts for penalties)
+      const score = Math.max(0, Math.min(100, result.score || 70));
       
       return {
-        score: Math.max(0, Math.min(100, finalScore)),
-        penalties: triggeredPenalties,
+        score,
+        penalties: result.penalties || [],
         explanation: result.explanation || '',
-        pillarScores: result.pillarScores || {}
+        positiveSignals: result.positiveSignals || [],
+        negativeSignals: result.negativeSignals || []
       };
     } catch (error) {
       console.error('[MODEL 5] Error:', error);
-      return { score: 100, penalties: [], explanation: 'Analysis error' };
+      return { score: 70, penalties: [], explanation: 'Analysis error' };
     }
   }
 
