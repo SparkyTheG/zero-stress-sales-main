@@ -913,51 +913,53 @@ RETURN JSON:
         messages: [
           {
             role: 'system',
-            content: `You are a red flag detector. Identify warning signs using CSV rules.
+            content: `You are a red flag detector for SALES CONVERSATIONS.
 
-Score the relevant pillars (1-10) then apply rules.
+CONTEXT: This is a conversation between a CLOSER (salesperson) and a PROSPECT (potential buyer).
+Your job is to find WARNING SIGNS in what the PROSPECT actually says.
 
-CLOSE BLOCKER RULES (from Lubometer CSV):
+⚠️ CRITICAL: Only flag things the PROSPECT ACTUALLY SAID in the transcript. 
+DO NOT invent or assume red flags. If something wasn't said, don't flag it.
 
-Rule 1: Not Enough Pain or Urgency
-- Condition: P1 (Pain/Desire) ≤ 6 AND P2 (Urgency) ≤ 5
-- Severity: HIGH
-- Result: Do not attempt to close
+RED FLAG CATEGORIES:
 
-Rule 2: High Price Sensitivity + Low Money
-- Condition: P6 raw (Price Sensitivity) ≥ 7 AND P4 (Money) ≤ 5
-- Severity: HIGH
-- Result: Do not push on price
+1. CLOSE BLOCKERS (serious - may prevent sale):
+   - Prospect shows no real pain or problem to solve
+   - Prospect has no urgency or timeline
+   - Prospect can't afford it AND is price sensitive
+   - Quote their actual words as evidence
 
-INCOHERENCE RED FLAGS (from Truth Index CSV):
+2. INCOHERENCE (contradictions in what they say):
+   - Says they have big pain but "no rush" to fix it
+   - Says they want change but won't make a decision
+   - Says they have money but keeps objecting on price
+   - Claims to be the decision maker but mentions needing approval
+   - Quote the contradiction as evidence
 
-- High Pain but Low Urgency: Says things are bad but shows no rush
-- High Desire but Avoids Decision: Wants change but won't commit
-- Has Money but Resists Price: Can afford it but keeps objecting on price
-- Claims Authority but Needs Approval: Says they decide, then mentions others
-- Wants Results but Won't Own It: Desires outcome but blames externally
+3. BEHAVIORAL (warning patterns):
+   - Uses procrastination language ("maybe later", "someday", "I'll think about it")
+   - Avoids answering direct questions
+   - Blames others/external factors repeatedly
+   - Quote their actual words
 
-BEHAVIORAL RED FLAGS:
-
-- Repeated objections without resolution
-- Avoids direct questions
-- Procrastination language ("later", "maybe", "someday")
-- Price shopping/comparison signals
-- External blame patterns
+RULES:
+- ONLY include red flags with EVIDENCE from the transcript
+- If the prospect hasn't said anything concerning, return empty array
+- Maximum 3 red flags (most important ones only)
+- Include their actual quote as evidence
 
 RETURN JSON:
 {
   "redFlags": [
-    {"text": "Not enough pain or urgency to close", "severity": "high", "category": "close_blocker", "rule": "P1 ≤ 6 AND P2 ≤ 5"},
-    {"text": "Says they decide but mentioned checking with partner", "severity": "medium", "category": "incoherence"}
+    {"text": "Prospect said 'I'll think about it' - procrastination signal", "severity": "medium", "evidence": "I'll think about it"}
   ]
 }
 
-Maximum 5 red flags. Empty array if none detected.`
+Return empty array if NO red flags: {"redFlags": []}`
           },
           {
             role: 'user',
-            content: transcript
+            content: `Analyze this sales conversation for red flags. ONLY flag things the prospect ACTUALLY said:\n\n${transcript}`
           }
         ],
         temperature: 0.2,
@@ -969,10 +971,13 @@ Maximum 5 red flags. Empty array if none detected.`
       if (!content) return [];
 
       const result = JSON.parse(content);
-      return (result.redFlags || []).slice(0, 5).map((flag: any) => ({
+      const flags = result.redFlags || [];
+      
+      // Only return flags that have actual evidence
+      return flags.slice(0, 3).map((flag: any) => ({
         text: flag.text,
         severity: flag.severity || 'medium',
-        category: flag.category || 'behavioral'
+        evidence: flag.evidence || ''
       }));
     } catch (error) {
       console.error('[MODEL 6] Error:', error);
