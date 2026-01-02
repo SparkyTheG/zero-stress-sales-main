@@ -226,10 +226,6 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
                 {authError}
               </div>
             )}
-
-            <div className="mt-3 text-xs text-gray-500">
-              Note: You must set `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` in your frontend env for auth to work.
-            </div>
           </div>
         )}
 
