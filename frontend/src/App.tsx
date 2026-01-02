@@ -39,6 +39,36 @@ function normalizeKey(text: unknown): string {
   return String(text ?? '').toLowerCase().trim().replace(/\s+/g, ' ');
 }
 
+function cleanDialName(name: unknown): string {
+  const raw = String(name ?? '').trim();
+  if (!raw) return '';
+  // Remove leading numbering/bullets: "1. ", "#1 ", "- "
+  const noPrefix = raw.replace(/^\s*(#?\d+[\.\)\-:]\s+|[-•]\s+)/, '');
+  // Keep only the indicator name; strip trailing metadata like "(P1)", "- 85%", ": blah"
+  return noPrefix
+    .split(' - ')[0]
+    .split(' — ')[0]
+    .split(':')[0]
+    .split('(')[0]
+    .trim();
+}
+
+function normalizeRedFlags(flags: RedFlag[]): RedFlag[] {
+  const seen = new Set<string>();
+  const out: RedFlag[] = [];
+  for (const f of flags) {
+    const text = String((f as any)?.text ?? '').trim();
+    if (!text) continue;
+    const severity = (f as any)?.severity || 'medium';
+    const key = `${severity}:${normalizeKey(text)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ text, severity });
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+
 function keyToStableId(prefix: string, key: string): string {
   const safe = key
     .toLowerCase()
@@ -118,8 +148,9 @@ function App() {
   const [objections, setObjections] = useState<Objection[]>([]);
   const [psychologicalDials, setPsychologicalDials] = useState<PsychologicalDial[]>([]);
   const [redFlags, setRedFlags] = useState<RedFlag[]>([]);
-  // Prevent flicker: if a run returns empty red flags, delay clearing briefly.
-  const redFlagsClearTimeoutRef = useRef<number | null>(null);
+  // Red flags stability: ignore occasional empty runs; clear only after a few consecutive empty updates.
+  const redFlagsEmptyRunStreakRef = useRef(0);
+  const lastRedFlagsRunIdRef = useRef<number | null>(null);
   const [lubometerTiers, setLubometerTiers] = useState<LubometerTier[]>([]);
   const [truthIndexScore, setTruthIndexScore] = useState(0);
   const [aiObjectionScripts, setAiObjectionScripts] = useState<Record<string, any>>({});
@@ -150,7 +181,10 @@ function App() {
         } else if (type === 'partial') {
           // Progressive partial updates - update state incrementally
           if (data.psychologicalDials && Array.isArray(data.psychologicalDials) && data.psychologicalDials.length > 0) {
-            setPsychologicalDials(prev => upsertRollingDials(prev, data.psychologicalDials, 5));
+            const cleaned = data.psychologicalDials
+              .map((d: any) => ({ ...d, name: cleanDialName(d.name) }))
+              .filter((d: any) => d.name);
+            setPsychologicalDials(prev => upsertRollingDials(prev, cleaned, 5));
           }
           
           if (data.objections && Array.isArray(data.objections) && data.objections.length > 0) {
@@ -167,21 +201,23 @@ function App() {
           
           // Red flags: treat empty array as "maybe none", not an immediate clear (reduces flicker).
           if (Object.prototype.hasOwnProperty.call(data, 'redFlags') && Array.isArray(data.redFlags)) {
-            const incoming: RedFlag[] = data.redFlags;
+            const incomingRaw: RedFlag[] = data.redFlags;
+            const incoming = normalizeRedFlags(incomingRaw);
+            const rid = typeof runId === 'number' ? runId : null;
+            if (rid !== null && lastRedFlagsRunIdRef.current === rid) {
+              // duplicate delivery for same run
+              return;
+            }
+            lastRedFlagsRunIdRef.current = rid;
+
             if (incoming.length > 0) {
-              if (redFlagsClearTimeoutRef.current) {
-                window.clearTimeout(redFlagsClearTimeoutRef.current);
-                redFlagsClearTimeoutRef.current = null;
-              }
+              redFlagsEmptyRunStreakRef.current = 0;
               setRedFlags(incoming);
             } else {
-              if (redFlagsClearTimeoutRef.current) {
-                window.clearTimeout(redFlagsClearTimeoutRef.current);
-              }
-              redFlagsClearTimeoutRef.current = window.setTimeout(() => {
+              redFlagsEmptyRunStreakRef.current += 1;
+              if (redFlagsEmptyRunStreakRef.current >= 3) {
                 setRedFlags([]);
-                redFlagsClearTimeoutRef.current = null;
-              }, 1000);
+              }
             }
           }
         }
@@ -196,24 +232,22 @@ function App() {
           setObjections(prev => upsertRollingObjections(prev, data.objections, 5));
         }
         if (data.psychologicalDials && Array.isArray(data.psychologicalDials) && data.psychologicalDials.length > 0) {
-          setPsychologicalDials(prev => upsertRollingDials(prev, data.psychologicalDials, 5));
+          const cleaned = data.psychologicalDials
+            .map((d: any) => ({ ...d, name: cleanDialName(d.name) }))
+            .filter((d: any) => d.name);
+          setPsychologicalDials(prev => upsertRollingDials(prev, cleaned, 5));
         }
         // Apply same "anti-flap" behavior for red flags on full analysis payloads
         if (Array.isArray(data.redFlags)) {
-          if (data.redFlags.length > 0) {
-            if (redFlagsClearTimeoutRef.current) {
-              window.clearTimeout(redFlagsClearTimeoutRef.current);
-              redFlagsClearTimeoutRef.current = null;
-            }
-            setRedFlags(data.redFlags);
+          const incoming = normalizeRedFlags(data.redFlags);
+          if (incoming.length > 0) {
+            redFlagsEmptyRunStreakRef.current = 0;
+            setRedFlags(incoming);
           } else {
-            if (redFlagsClearTimeoutRef.current) {
-              window.clearTimeout(redFlagsClearTimeoutRef.current);
-            }
-            redFlagsClearTimeoutRef.current = window.setTimeout(() => {
+            redFlagsEmptyRunStreakRef.current += 1;
+            if (redFlagsEmptyRunStreakRef.current >= 3) {
               setRedFlags([]);
-              redFlagsClearTimeoutRef.current = null;
-            }, 1000);
+            }
           }
         } else {
           // If backend omits redFlags, don't clear existing UI

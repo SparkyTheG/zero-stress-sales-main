@@ -36,7 +36,7 @@ export default function PsychologicalDials({ dials }: PsychologicalDialsProps) {
             const brightColor = getBrightColor(dial.color, index);
             return (
               <div
-                key={dial.name}
+                key={`${dial.name}-${index}`}
                 className="p-4 bg-gray-800/40 border border-gray-700/40 rounded-xl hover:border-gray-600/60 transition-all"
               >
                 <div className="flex items-center justify-between mb-3">
