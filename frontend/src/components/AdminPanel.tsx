@@ -106,14 +106,25 @@ function AuthScreen({
       if (authMode === 'signin') {
         const result = await signInWithPassword(emailTrimmed, password);
         if (result.error) {
-          setAuthError(result.error);
+          // Make sign-in errors more user-friendly
+          if (result.error.toLowerCase().includes('invalid login credentials')) {
+            setAuthError('Invalid email or password. Please check your credentials and try again.');
+          } else {
+            setAuthError(result.error);
+          }
         } else {
           onAuthSuccess();
         }
       } else {
         const result = await signUpWithPassword(emailTrimmed, password);
         if (result.error) {
-          setAuthError(result.error);
+          // Check if account already exists
+          const errorLower = result.error.toLowerCase();
+          if (errorLower.includes('already registered') || errorLower.includes('already exists') || errorLower.includes('user already')) {
+            setAuthError('ACCOUNT_EXISTS');
+          } else {
+            setAuthError(result.error);
+          }
         } else {
           // Signup success - show verification message
           setSignupSuccess(true);
@@ -249,12 +260,32 @@ function AuthScreen({
               )}
             </div>
 
-            {authError && (
+            {authError && authError === 'ACCOUNT_EXISTS' ? (
+              <div className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+                <div className="flex items-center gap-2 text-amber-300 mb-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  <span className="text-sm font-medium">Account already exists!</span>
+                </div>
+                <p className="text-gray-400 text-sm mb-3">
+                  An account with this email already exists. Would you like to sign in instead?
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthError(null);
+                    setAuthMode('signin');
+                  }}
+                  className="w-full px-4 py-2 bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/40 rounded-lg transition-all text-amber-200 text-sm font-medium"
+                >
+                  Switch to Sign In
+                </button>
+              </div>
+            ) : authError ? (
               <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-300 text-sm">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
                 {authError}
               </div>
-            )}
+            ) : null}
 
             <button
               type="submit"
