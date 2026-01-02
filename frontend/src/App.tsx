@@ -39,6 +39,15 @@ function normalizeKey(text: unknown): string {
   return String(text ?? '').toLowerCase().trim().replace(/\s+/g, ' ');
 }
 
+function keyToStableId(prefix: string, key: string): string {
+  const safe = key
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60);
+  return `${prefix}_${safe || 'unknown'}`;
+}
+
 function upsertRollingObjections(prev: Objection[], incoming: Objection[], limit = 5): Objection[] {
   if (!Array.isArray(incoming) || incoming.length === 0) return prev;
 
@@ -49,8 +58,12 @@ function upsertRollingObjections(prev: Objection[], incoming: Objection[], limit
   for (const raw of incoming) {
     const key = normalizeKey(raw.text);
     if (!key) continue;
+    const backendId = raw.backendId ?? raw.id;
     const obj: Objection = {
       ...raw,
+      // Stabilize frontend `id` by text so list keys + selection don't break when backend reassigns obj1..obj5
+      id: keyToStableId('obj', key),
+      backendId,
       probability: Math.round(clampPercent(raw.probability)),
     };
 
@@ -105,9 +118,8 @@ function App() {
   const [objections, setObjections] = useState<Objection[]>([]);
   const [psychologicalDials, setPsychologicalDials] = useState<PsychologicalDial[]>([]);
   const [redFlags, setRedFlags] = useState<RedFlag[]>([]);
-  // Prevent "flapping" where one analysis finds flags and a later run returns [] and clears them.
-  // We only clear after 2 consecutive empty redFlags updates.
-  const redFlagsEmptyStreakRef = useRef(0);
+  // Prevent flicker: if a run returns empty red flags, delay clearing briefly.
+  const redFlagsClearTimeoutRef = useRef<number | null>(null);
   const [lubometerTiers, setLubometerTiers] = useState<LubometerTier[]>([]);
   const [truthIndexScore, setTruthIndexScore] = useState(0);
   const [aiObjectionScripts, setAiObjectionScripts] = useState<Record<string, any>>({});
@@ -157,13 +169,19 @@ function App() {
           if (Object.prototype.hasOwnProperty.call(data, 'redFlags') && Array.isArray(data.redFlags)) {
             const incoming: RedFlag[] = data.redFlags;
             if (incoming.length > 0) {
-              redFlagsEmptyStreakRef.current = 0;
+              if (redFlagsClearTimeoutRef.current) {
+                window.clearTimeout(redFlagsClearTimeoutRef.current);
+                redFlagsClearTimeoutRef.current = null;
+              }
               setRedFlags(incoming);
             } else {
-              redFlagsEmptyStreakRef.current += 1;
-              if (redFlagsEmptyStreakRef.current >= 2) {
-                setRedFlags([]);
+              if (redFlagsClearTimeoutRef.current) {
+                window.clearTimeout(redFlagsClearTimeoutRef.current);
               }
+              redFlagsClearTimeoutRef.current = window.setTimeout(() => {
+                setRedFlags([]);
+                redFlagsClearTimeoutRef.current = null;
+              }, 1000);
             }
           }
         }
@@ -183,13 +201,19 @@ function App() {
         // Apply same "anti-flap" behavior for red flags on full analysis payloads
         if (Array.isArray(data.redFlags)) {
           if (data.redFlags.length > 0) {
-            redFlagsEmptyStreakRef.current = 0;
+            if (redFlagsClearTimeoutRef.current) {
+              window.clearTimeout(redFlagsClearTimeoutRef.current);
+              redFlagsClearTimeoutRef.current = null;
+            }
             setRedFlags(data.redFlags);
           } else {
-            redFlagsEmptyStreakRef.current += 1;
-            if (redFlagsEmptyStreakRef.current >= 2) {
-              setRedFlags([]);
+            if (redFlagsClearTimeoutRef.current) {
+              window.clearTimeout(redFlagsClearTimeoutRef.current);
             }
+            redFlagsClearTimeoutRef.current = window.setTimeout(() => {
+              setRedFlags([]);
+              redFlagsClearTimeoutRef.current = null;
+            }, 1000);
           }
         } else {
           // If backend omits redFlags, don't clear existing UI
@@ -229,11 +253,13 @@ function App() {
   // Find ALL scripts for the selected objection - memoized to avoid recalculation
   const currentScripts = useMemo(() => {
     if (!selectedObjection) return [];
+    const backendId = objections.find(o => o.id === selectedObjection)?.backendId;
+    if (!backendId) return [];
     return Object.entries(aiObjectionScripts)
-      .filter(([key]) => key.startsWith(`${selectedObjection}_`))
+      .filter(([key]) => key.startsWith(`${backendId}_`))
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([_, script]) => script);
-  }, [selectedObjection, aiObjectionScripts]);
+  }, [selectedObjection, aiObjectionScripts, objections]);
 
   // Handle transcript from speech recognition
   const handleTranscript = useCallback((text: string, isFinal: boolean) => {

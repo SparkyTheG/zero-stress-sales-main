@@ -569,7 +569,7 @@ OBJECTION TYPES TO LOOK FOR:
 
 RETURN JSON:
 {"objections": [
-  {"id": "obj1", "text": "what they said", "probability": 75, "indicator": 11}
+  {"id": "obj1", "text": "what they said", "probability": 0, "indicator": 11}
 ]}
 
 Return empty array if NO objections found: {"objections": []}`

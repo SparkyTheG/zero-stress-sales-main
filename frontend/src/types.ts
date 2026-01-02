@@ -1,5 +1,7 @@
 export interface Objection {
   id: string;
+  // Backend "obj1..obj5" (used for script lookup). Frontend `id` may be stabilized for UI.
+  backendId?: string;
   text: string;
   probability: number;
 }
