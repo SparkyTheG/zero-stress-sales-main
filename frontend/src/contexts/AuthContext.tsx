@@ -21,13 +21,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let mounted = true;
 
-    // Initial session load
+    // Initial session load (handles email confirmation callback hash fragments)
     supabase.auth.getSession().then(({ data, error }) => {
       if (!mounted) return;
       if (error) console.error('[auth] getSession error:', error);
       setSession(data.session ?? null);
       setUser(data.session?.user ?? null);
       setLoading(false);
+      
+      // Clean up URL hash after handling email confirmation
+      if (window.location.hash && data.session) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
     });
 
     // Subscribe to future auth changes
@@ -36,6 +41,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(nextSession ?? null);
       setUser(nextSession?.user ?? null);
       setLoading(false);
+      
+      // Clean up URL hash after email confirmation
+      if (window.location.hash && nextSession) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
     });
 
     return () => {
@@ -53,7 +63,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: error ? error.message : null };
     },
     signUpWithPassword: async (email: string, password: string) => {
-      const { error } = await supabase.auth.signUp({ email, password });
+      const { error } = await supabase.auth.signUp({ 
+        email, 
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}${window.location.pathname}`,
+        },
+      });
       return { error: error ? error.message : null };
     },
     signOut: async () => {
