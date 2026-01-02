@@ -7,8 +7,8 @@ const PILLAR_DEFINITIONS = [
   { id: 'P3', name: 'Decisiveness', weight: 1.0, indicatorIds: [9, 10, 11, 12] },
   { id: 'P4', name: 'Available Money', weight: 1.5, indicatorIds: [13, 14, 15, 16] },
   { id: 'P5', name: 'Responsibility & Ownership', weight: 1.0, indicatorIds: [17, 18, 19, 20] },
-  { id: 'P6', name: 'Price Sensitivity', weight: 1.0, indicatorIds: [21, 22, 23] },
-  { id: 'P7', name: 'Trust', weight: 1.0, indicatorIds: [24, 25, 26, 27] },
+  { id: 'P6', name: 'Price Sensitivity', weight: 1.5, indicatorIds: [21, 22, 23] },
+  { id: 'P7', name: 'Trust', weight: 1.5, indicatorIds: [24, 25, 26, 27] },
 ];
 
 export class PillarCalculator {

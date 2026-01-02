@@ -905,7 +905,7 @@ Return empty array if NO objections found: {"objections": []}`
           id: p.id,
           name: p.name,
           score: p.averageScore,
-          weight: p.id === 'P1' || p.id === 'P4' ? 1.5 : 1.0
+          weight: ['P1', 'P4', 'P6', 'P7'].includes(p.id) ? 1.5 : 1.0
         })),
         indicators
       };
