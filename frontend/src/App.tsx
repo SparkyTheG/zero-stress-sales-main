@@ -49,42 +49,68 @@ function App() {
   const [isRecording, setIsRecording] = useState(false);
   const [wsClientRef, setWsClientRef] = useState<ReturnType<typeof getWebSocketClient> | null>(null);
 
-  // Merge helper: keep up to 5 items, prefer newer incoming items, drop oldest when over limit.
-  const mergeLimited = useCallback(<T, K extends keyof T>(prev: T[], incoming: T[], key: K, limit = 5): T[] => {
+  // Normalize text for comparison (lowercase, trim, collapse whitespace)
+  const normalizeText = (text: string) => text.toLowerCase().trim().replace(/\s+/g, ' ');
+
+  // For objections: always accept the latest batch from AI, keep max 5
+  // This ensures new objections come through and old ones get replaced
+  const updateObjections = useCallback((prev: Objection[], incoming: Objection[]): Objection[] => {
     if (!Array.isArray(incoming) || incoming.length === 0) return prev;
-
-    const seen = new Set<string>();
-    const result: T[] = [];
-
-    // Start with existing items in order
-    for (const item of prev) {
-      const id = String(item[key] ?? '');
-      if (!seen.has(id) && id.length > 0) {
-        seen.add(id);
-        result.push(item);
+    
+    // Use text as the unique key (not ID, since AI reuses obj1, obj2, etc.)
+    const seenTexts = new Set<string>();
+    const result: Objection[] = [];
+    
+    // First, add all incoming objections (newest data)
+    for (const obj of incoming) {
+      const normalizedText = normalizeText(obj.text || '');
+      if (normalizedText && !seenTexts.has(normalizedText)) {
+        seenTexts.add(normalizedText);
+        result.push(obj);
       }
     }
-
-    // Append/replace with incoming items (newest at the end)
-    for (const item of incoming) {
-      const id = String(item[key] ?? '');
-      if (id.length === 0) continue;
-      if (seen.has(id)) {
-        // Replace existing item with updated data
-        const idx = result.findIndex(r => String((r as any)[key]) === id);
-        if (idx >= 0) result[idx] = item;
-      } else {
-        seen.add(id);
-        result.push(item);
+    
+    // Then, add previous objections that aren't duplicates of incoming
+    for (const obj of prev) {
+      const normalizedText = normalizeText(obj.text || '');
+      if (normalizedText && !seenTexts.has(normalizedText)) {
+        seenTexts.add(normalizedText);
+        result.push(obj);
       }
     }
+    
+    // Keep only the first 5 (newest from incoming + remaining from prev)
+    return result.slice(0, 5);
+  }, []);
 
-    // Trim to limit, dropping the oldest (front)
-    while (result.length > limit) {
-      result.shift();
+  // For dials: always accept the latest batch from AI, keep max 5
+  const updateDials = useCallback((prev: PsychologicalDial[], incoming: PsychologicalDial[]): PsychologicalDial[] => {
+    if (!Array.isArray(incoming) || incoming.length === 0) return prev;
+    
+    // Use name as the unique key
+    const seenNames = new Set<string>();
+    const result: PsychologicalDial[] = [];
+    
+    // First, add all incoming dials (newest data)
+    for (const dial of incoming) {
+      const normalizedName = normalizeText(dial.name || '');
+      if (normalizedName && !seenNames.has(normalizedName)) {
+        seenNames.add(normalizedName);
+        result.push(dial);
+      }
     }
-
-    return result;
+    
+    // Then, add previous dials that aren't duplicates of incoming
+    for (const dial of prev) {
+      const normalizedName = normalizeText(dial.name || '');
+      if (normalizedName && !seenNames.has(normalizedName)) {
+        seenNames.add(normalizedName);
+        result.push(dial);
+      }
+    }
+    
+    // Keep only the first 5 (newest from incoming + remaining from prev)
+    return result.slice(0, 5);
   }, []);
 
   useEffect(() => {
@@ -110,11 +136,11 @@ function App() {
         } else if (type === 'partial') {
           // Progressive partial updates - update state incrementally
           if (data.psychologicalDials) {
-            setPsychologicalDials(prev => mergeLimited(prev, data.psychologicalDials || [], 'name'));
+            setPsychologicalDials(prev => updateDials(prev, data.psychologicalDials || []));
           }
           
           if (data.objections) {
-            setObjections(prev => mergeLimited(prev, data.objections || [], 'id'));
+            setObjections(prev => updateObjections(prev, data.objections || []));
           }
           
           if (data.lubometer) {
@@ -146,8 +172,8 @@ function App() {
         console.log('Full analysis received (fallback):', data);
         
         // Fallback: Update all at once if full analysis received
-        setObjections(prev => mergeLimited(prev, data.objections || [], 'id'));
-        setPsychologicalDials(prev => mergeLimited(prev, data.psychologicalDials || [], 'name'));
+        setObjections(prev => updateObjections(prev, data.objections || []));
+        setPsychologicalDials(prev => updateDials(prev, data.psychologicalDials || []));
         // Apply same "anti-flap" behavior for red flags on full analysis payloads
         if (Array.isArray(data.redFlags)) {
           if (data.redFlags.length > 0) {
