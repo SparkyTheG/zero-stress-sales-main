@@ -10,6 +10,11 @@ interface ClientSession {
   gptAnalyzer: GPTConversationAnalyzer;
   analysisInterval?: NodeJS.Timeout;
   lastAnalysisTime?: number;
+  // Performance: prevent overlapping analysis runs
+  isAnalyzing: boolean;
+  pendingAnalysis: boolean;
+  // Monotonic run ID so frontend can ignore stale updates
+  currentRunId: number;
 }
 
 export class ConversationWebSocketServer {
@@ -35,14 +40,18 @@ export class ConversationWebSocketServer {
       sessionId,
       transcript: [],
       gptAnalyzer: new GPTConversationAnalyzer(this.openaiApiKey),
+      isAnalyzing: false,
+      pendingAnalysis: false,
+      currentRunId: 0,
     };
 
     this.sessions.set(sessionId, session);
 
-    ws.on('message', async (data: Buffer) => {
+    ws.on('message', (data: Buffer) => {
       try {
         const message = JSON.parse(data.toString());
-        await this.handleMessage(session, message);
+        // NON-BLOCKING: don't await - let message handling continue immediately
+        this.handleMessage(session, message);
       } catch (error) {
         console.error('Error handling message:', error);
         ws.send(JSON.stringify({ type: 'error', error: 'Invalid message format' }));
@@ -67,7 +76,7 @@ export class ConversationWebSocketServer {
     console.log(`New session connected: ${sessionId}`);
   }
 
-  private async handleMessage(session: ClientSession, message: any) {
+  private handleMessage(session: ClientSession, message: any) {
     switch (message.type) {
       case 'audio':
         // Handle audio data (future enhancement for direct audio processing)
@@ -94,23 +103,22 @@ export class ConversationWebSocketServer {
 
           console.log(`[${session.sessionId}] ${speaker}: ${message.text}`);
 
-          // Auto-analyze if this is a final transcript and enough time has passed
-          // Reduced from 3000ms to 1500ms for faster response
+          // FAST: reduced debounce from 1500ms to 800ms for quicker response
           const now = Date.now();
           const timeSinceLastAnalysis = now - (session.lastAnalysisTime || 0);
           
-          if (message.isFinal !== false && timeSinceLastAnalysis > 1500) {
-            // Analyze after 1.5 seconds of the last analysis (reduced for faster response)
-            console.log(`[${session.sessionId}] Triggering analysis (time since last: ${timeSinceLastAnalysis}ms)`);
-            await this.analyzeAndSend(session);
+          if (message.isFinal !== false && timeSinceLastAnalysis > 800) {
+            // Schedule analysis (non-blocking)
+            console.log(`[${session.sessionId}] Scheduling analysis (time since last: ${timeSinceLastAnalysis}ms)`);
+            this.scheduleAnalysis(session);
           }
         }
         break;
 
       case 'analyze':
-        // Trigger immediate analysis
+        // Trigger immediate analysis (non-blocking)
         console.log(`[${session.sessionId}] Manual analysis requested`);
-        await this.analyzeAndSend(session);
+        this.scheduleAnalysis(session);
         break;
 
       case 'clear':
@@ -125,18 +133,46 @@ export class ConversationWebSocketServer {
     }
   }
 
+  // NON-BLOCKING analysis scheduler with overlap prevention
+  private scheduleAnalysis(session: ClientSession) {
+    // If already analyzing, mark pending and return immediately
+    if (session.isAnalyzing) {
+      session.pendingAnalysis = true;
+      console.log(`[${session.sessionId}] Analysis already running, marked pending`);
+      return;
+    }
+    
+    // Start analysis (fire-and-forget, non-blocking)
+    session.isAnalyzing = true;
+    session.pendingAnalysis = false;
+    
+    this.analyzeAndSend(session).finally(() => {
+      session.isAnalyzing = false;
+      
+      // If a new analysis was requested while we were busy, run it now
+      if (session.pendingAnalysis) {
+        console.log(`[${session.sessionId}] Running pending analysis`);
+        this.scheduleAnalysis(session);
+      }
+    });
+  }
+
   private async analyzeAndSend(session: ClientSession) {
     try {
       session.lastAnalysisTime = Date.now();
+      // Increment run ID for this analysis cycle
+      session.currentRunId++;
+      const runId = session.currentRunId;
       
-      console.log(`[${session.sessionId}] Starting progressive analysis...`);
+      console.log(`[${session.sessionId}] Starting progressive analysis (run ${runId})...`);
       
-      // Send updates progressively as they become available
+      // Send updates progressively as they become available - include runId for stale detection
       const sendPartial = (type: string, data: any) => {
         if (session.ws.readyState === WebSocket.OPEN) {
           session.ws.send(JSON.stringify({
             type,
             data,
+            runId, // Frontend uses this to ignore stale updates
           }));
         }
       };
@@ -144,7 +180,7 @@ export class ConversationWebSocketServer {
       // Analyze with progressive callbacks
       await session.gptAnalyzer.analyzeProgressive(sendPartial);
       
-      console.log(`[${session.sessionId}] Progressive analysis completed`);
+      console.log(`[${session.sessionId}] Progressive analysis completed (run ${runId})`);
     } catch (error) {
       console.error('Error analyzing conversation:', error);
       if (session.ws.readyState === WebSocket.OPEN) {

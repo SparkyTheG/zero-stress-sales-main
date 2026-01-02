@@ -5,6 +5,7 @@ export interface WebSocketMessage {
   sessionId?: string;
   data?: AnalysisResult | any;
   error?: string;
+  runId?: number; // For stale update detection
 }
 
 // Get WebSocket URL dynamically based on current location
@@ -40,8 +41,10 @@ export class AnalysisWebSocket {
   private maxReconnectAttempts = 5;
   private reconnectDelay = 3000;
   private onAnalysisCallback?: (data: AnalysisResult) => void;
-  private onPartialUpdateCallback?: (type: string, data: any) => void;
+  private onPartialUpdateCallback?: (type: string, data: any, runId?: number) => void;
   private onErrorCallback?: (error: Error) => void;
+  // Track latest run ID to ignore stale updates
+  private latestRunId = 0;
 
   constructor(private url: string = getDefaultWebSocketUrl()) {
     console.log('WebSocket URL:', this.url);
@@ -60,6 +63,12 @@ export class AnalysisWebSocket {
         try {
           const message: WebSocketMessage = JSON.parse(event.data);
           
+          // Track latest run ID and ignore stale updates
+          const runId = message.runId;
+          if (runId !== undefined && runId > this.latestRunId) {
+            this.latestRunId = runId;
+          }
+          
           switch (message.type) {
             case 'session':
               this.sessionId = message.sessionId || null;
@@ -73,14 +82,24 @@ export class AnalysisWebSocket {
               break;
             
             case 'analysis_partial':
+              // FAST: Skip stale updates from older runs
+              if (runId !== undefined && runId < this.latestRunId) {
+                console.log(`[WS] Ignoring stale partial update (run ${runId} < latest ${this.latestRunId})`);
+                break;
+              }
               if (message.data && this.onPartialUpdateCallback) {
-                this.onPartialUpdateCallback('partial', message.data);
+                this.onPartialUpdateCallback('partial', message.data, runId);
               }
               break;
 
             case 'analysis_scripts':
+              // FAST: Skip stale script updates from older runs
+              if (runId !== undefined && runId < this.latestRunId) {
+                console.log(`[WS] Ignoring stale scripts update (run ${runId} < latest ${this.latestRunId})`);
+                break;
+              }
               if (message.data && this.onPartialUpdateCallback) {
-                this.onPartialUpdateCallback('scripts', message.data);
+                this.onPartialUpdateCallback('scripts', message.data, runId);
               }
               break;
             
@@ -149,7 +168,7 @@ export class AnalysisWebSocket {
     this.onAnalysisCallback = callback;
   }
 
-  onPartialUpdate(callback: (type: string, data: any) => void) {
+  onPartialUpdate(callback: (type: string, data: any, runId?: number) => void) {
     this.onPartialUpdateCallback = callback;
   }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
 import { User, Settings, Users, Star } from 'lucide-react';
 import WhisperEngine from './components/WhisperEngine';
 import Lubometer from './components/Lubometer';
@@ -6,6 +6,14 @@ import PsychologicalDials from './components/PsychologicalDials';
 import TruthIndex from './components/TruthIndex';
 import RedFlags from './components/RedFlags';
 import TopObjections from './components/TopObjections';
+
+// Memoized versions of expensive components to avoid unnecessary re-renders
+const MemoizedLubometer = memo(Lubometer);
+const MemoizedPsychologicalDials = memo(PsychologicalDials);
+const MemoizedTruthIndex = memo(TruthIndex);
+const MemoizedRedFlags = memo(RedFlags);
+const MemoizedWhisperEngine = memo(WhisperEngine);
+const MemoizedTopObjections = memo(TopObjections);
 import CustomerProfile from './components/CustomerProfile';
 import CloserProfileView from './components/CloserProfileView';
 import SalesManagerDashboard from './components/SalesManagerDashboard';
@@ -47,8 +55,8 @@ function App() {
       setWsClientRef(wsClient);
       
       // Handle partial updates (progressive updates - FAST)
-      wsClient.onPartialUpdate((type: string, data: any) => {
-        console.log(`Partial update received (${type}):`, data);
+      wsClient.onPartialUpdate((type: string, data: any, runId?: number) => {
+        console.log(`Partial update received (${type}, run ${runId}):`, data);
         
         if (type === 'scripts') {
           // Scripts update - MERGE with existing scripts (don't replace!)
@@ -141,13 +149,14 @@ function App() {
 
   // Use only AI-generated scripts - no mock data fallback
   // Scripts are keyed as obj1_1, obj1_2, obj1_3 (3 per objection)
-  // Find ALL scripts for the selected objection
-  const currentScripts = selectedObjection 
-    ? Object.entries(aiObjectionScripts)
-        .filter(([key]) => key.startsWith(`${selectedObjection}_`))
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([_, script]) => script)
-    : [];
+  // Find ALL scripts for the selected objection - memoized to avoid recalculation
+  const currentScripts = useMemo(() => {
+    if (!selectedObjection) return [];
+    return Object.entries(aiObjectionScripts)
+      .filter(([key]) => key.startsWith(`${selectedObjection}_`))
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([_, script]) => script);
+  }, [selectedObjection, aiObjectionScripts]);
 
   // Handle transcript from speech recognition
   const handleTranscript = useCallback((text: string, isFinal: boolean) => {
@@ -267,12 +276,12 @@ function App() {
       <div className="max-w-[1800px] mx-auto px-8 py-8">
         <div className="grid grid-cols-12 gap-6">
           <div className="col-span-3 space-y-6">
-            <Lubometer tiers={lubometerTiers} />
-            <PsychologicalDials dials={psychologicalDials} />
+            <MemoizedLubometer tiers={lubometerTiers} />
+            <MemoizedPsychologicalDials dials={psychologicalDials} />
           </div>
 
           <div id="whisper-engine" className="col-span-6">
-            <WhisperEngine
+            <MemoizedWhisperEngine
               objections={objections}
               selectedObjection={selectedObjection}
               onSelectObjection={setSelectedObjection}
@@ -282,12 +291,12 @@ function App() {
           </div>
 
           <div className="col-span-3 space-y-6">
-            <TruthIndex score={truthIndexScore} />
-            <RedFlags flags={redFlags} />
+            <MemoizedTruthIndex score={truthIndexScore} />
+            <MemoizedRedFlags flags={redFlags} />
           </div>
 
           <div className="col-span-12">
-            <TopObjections objections={objections} highlightedObjection={selectedObjection} />
+            <MemoizedTopObjections objections={objections} highlightedObjection={selectedObjection} />
           </div>
         </div>
       </div>
