@@ -117,10 +117,18 @@ function AuthScreen({
         }
       } else {
         const result = await signUpWithPassword(emailTrimmed, password);
+        console.log('[Auth] Signup result:', result);
+        
         if (result.error) {
+          console.log('[Auth] Signup error:', result.error);
           // Check if account already exists
           const errorLower = result.error.toLowerCase();
-          if (errorLower.includes('already registered') || errorLower.includes('already exists') || errorLower.includes('user already')) {
+          if (errorLower.includes('already registered') || 
+              errorLower.includes('already exists') || 
+              errorLower.includes('user already') ||
+              errorLower.includes('email already') ||
+              errorLower.includes('sign in instead') ||
+              errorLower.includes('duplicate')) {
             setAuthError('ACCOUNT_EXISTS');
           } else {
             setAuthError(result.error);

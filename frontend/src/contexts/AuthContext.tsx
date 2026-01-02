@@ -63,14 +63,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: error ? error.message : null };
     },
     signUpWithPassword: async (email: string, password: string) => {
-      const { error } = await supabase.auth.signUp({ 
+      const { data, error } = await supabase.auth.signUp({ 
         email, 
         password,
         options: {
           emailRedirectTo: `${window.location.origin}${window.location.pathname}`,
         },
       });
-      return { error: error ? error.message : null };
+      
+      console.log('[auth] signUp response:', { data, error });
+      
+      if (error) {
+        return { error: error.message };
+      }
+      
+      // Supabase returns a user but with empty identities array if email already exists
+      // This is to prevent email enumeration attacks
+      if (data?.user && data.user.identities && data.user.identities.length === 0) {
+        return { error: 'An account with this email already exists. Please sign in instead.' };
+      }
+      
+      return { error: null };
     },
     signOut: async () => {
       const { error } = await supabase.auth.signOut();
