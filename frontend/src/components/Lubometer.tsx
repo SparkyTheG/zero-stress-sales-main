@@ -1,19 +1,29 @@
 import { DollarSign, TrendingUp, Zap } from 'lucide-react';
 import { LubometerTier } from '../types';
+import { useSettings } from '../contexts/SettingsContext';
 
 interface LubometerProps {
   tiers: LubometerTier[];
 }
 
-// Default tiers to show structure while loading
-const DEFAULT_TIERS: LubometerTier[] = [
-  { price: 2997, readiness: 0, label: 'Starter' },
-  { price: 7997, readiness: 0, label: 'Professional' },
-  { price: 15997, readiness: 0, label: 'Elite' },
-];
-
 export default function Lubometer({ tiers }: LubometerProps) {
-  const displayTiers = tiers && tiers.length > 0 ? tiers : DEFAULT_TIERS;
+  const { settings } = useSettings();
+  
+  // Use settings price tiers as defaults, merge with incoming readiness data
+  const defaultTiers: LubometerTier[] = settings.priceTiers.map(t => ({
+    price: t.price,
+    readiness: 0,
+    label: t.label,
+  }));
+  
+  // Merge incoming tiers with settings (match by index, use settings labels/prices)
+  const displayTiers = defaultTiers.map((defaultTier, index) => {
+    const incomingTier = tiers?.[index];
+    return {
+      ...defaultTier,
+      readiness: incomingTier?.readiness ?? 0,
+    };
+  });
   const hasData = tiers && tiers.length > 0 && tiers.some(t => t.readiness > 0);
 
   const getReadinessColor = (readiness: number) => {

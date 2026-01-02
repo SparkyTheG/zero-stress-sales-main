@@ -47,8 +47,6 @@ export default function WhisperEngine({
     return 'bg-gradient-to-r from-blue-500 to-indigo-500';
   };
 
-  const script = scripts[0];
-
   return (
     <div className="relative">
       <div className="absolute inset-0 bg-gradient-radial from-teal-500/30 via-transparent to-transparent blur-3xl -z-10 animate-energy-pulse"></div>
@@ -115,54 +113,61 @@ export default function WhisperEngine({
           })}
         </div>
 
-        {script ? (
-          <div className="animate-slide-up border-t border-teal-400/20 pt-6">
-            <div className="bg-gradient-to-br from-teal-500/10 to-cyan-500/10 border border-teal-400/40 rounded-2xl p-6 glow-teal">
-              <div className="flex items-start gap-3 mb-4">
-                <MessageSquare className="w-6 h-6 text-teal-400 mt-1 flex-shrink-0" />
-                <div>
-                  <h3 className="text-xl font-bold text-teal-300 mb-1">{script.title}</h3>
-                  <div className="text-sm space-y-1">
-                    <p className="text-cyan-400">
-                      <span className="text-white/60">Trigger:</span> {script.dialTrigger}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4 mt-6">
-                {script.steps?.map((step: ScriptStep) => (
-                  <div key={step.step} className="bg-gray-900/60 rounded-lg p-4 border border-teal-400/20">
-                    <div className="flex items-start gap-3">
-                      <span className="text-teal-400 font-bold text-lg flex-shrink-0">
-                        {step.step}.
+        {scripts.length > 0 ? (
+          <div className="animate-slide-up border-t border-teal-400/20 pt-6 space-y-4">
+            {scripts.slice(0, 2).map((script, idx) => (
+              <div key={idx} className={`bg-gradient-to-br ${idx === 0 ? 'from-teal-500/10 to-cyan-500/10 border-teal-400/40' : 'from-purple-500/10 to-pink-500/10 border-purple-400/40'} border rounded-2xl p-6 ${idx === 0 ? 'glow-teal' : ''}`}>
+                <div className="flex items-start gap-3 mb-4">
+                  <MessageSquare className={`w-6 h-6 ${idx === 0 ? 'text-teal-400' : 'text-purple-400'} mt-1 flex-shrink-0`} />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${idx === 0 ? 'bg-teal-500/20 text-teal-300' : 'bg-purple-500/20 text-purple-300'}`}>
+                        {idx === 0 ? '💚 Empathetic' : '💪 Direct'}
                       </span>
-                      <div className="flex-1">
-                        <p className="text-white leading-relaxed mb-2">{step.text}</p>
-                        {step.pause && (
-                          <p className="text-cyan-400/70 text-sm italic">
-                            (Pause {step.pause})
-                          </p>
-                        )}
-                        {step.note && (
-                          <p className="text-cyan-400/80 text-sm mt-2 flex items-start gap-2">
-                            <span className="text-cyan-400">⚡</span>
-                            <span>{step.note}</span>
-                          </p>
-                        )}
-                      </div>
+                    </div>
+                    <h3 className={`text-xl font-bold ${idx === 0 ? 'text-teal-300' : 'text-purple-300'} mb-1`}>{script.title}</h3>
+                    <div className="text-sm space-y-1">
+                      <p className={idx === 0 ? 'text-cyan-400' : 'text-pink-400'}>
+                        <span className="text-white/60">Trigger:</span> {script.dialTrigger}
+                      </p>
                     </div>
                   </div>
-                ))}
+                </div>
+
+                <div className="space-y-4 mt-6">
+                  {script.steps?.map((step: ScriptStep) => (
+                    <div key={step.step} className={`bg-gray-900/60 rounded-lg p-4 border ${idx === 0 ? 'border-teal-400/20' : 'border-purple-400/20'}`}>
+                      <div className="flex items-start gap-3">
+                        <span className={`${idx === 0 ? 'text-teal-400' : 'text-purple-400'} font-bold text-lg flex-shrink-0`}>
+                          {step.step}.
+                        </span>
+                        <div className="flex-1">
+                          <p className="text-white leading-relaxed mb-2">{step.text}</p>
+                          {step.pause && (
+                            <p className={`${idx === 0 ? 'text-cyan-400/70' : 'text-pink-400/70'} text-sm italic`}>
+                              (Pause {step.pause})
+                            </p>
+                          )}
+                          {step.note && (
+                            <p className={`${idx === 0 ? 'text-cyan-400/80' : 'text-pink-400/80'} text-sm mt-2 flex items-start gap-2`}>
+                              <span className={idx === 0 ? 'text-cyan-400' : 'text-pink-400'}>⚡</span>
+                              <span>{step.note}</span>
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            ))}
           </div>
         ) : (
           <div className="border-t border-teal-400/20 pt-6">
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <MessageSquare className="w-16 h-16 text-teal-400/30 mb-4" />
               <p className="text-white/50 text-lg">
-                Select an objection above to see your personalized handling script
+                Select an objection above to see your personalized handling scripts
               </p>
             </div>
           </div>

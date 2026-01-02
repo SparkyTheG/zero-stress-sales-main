@@ -145,21 +145,32 @@ export class AnalysisWebSocket {
     }
   }
 
-  sendTranscript(text: string, speaker: 'closer' | 'prospect' | 'unknown' = 'unknown', isFinal: boolean = true) {
+  sendTranscript(text: string, speaker: 'closer' | 'prospect' | 'unknown' = 'unknown', isFinal: boolean = true, settings?: any) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({
         type: 'transcript',
         text,
         speaker,
         isFinal,
+        settings, // Pass admin settings to backend
       }));
     }
   }
 
-  sendAnalyzeRequest() {
+  sendSettings(settings: any) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({
+        type: 'settings',
+        settings,
+      }));
+    }
+  }
+
+  sendAnalyzeRequest(settings?: any) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({
         type: 'analyze',
+        settings,
       }));
     }
   }

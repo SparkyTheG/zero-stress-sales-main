@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
-import { User, Settings, Users, Star } from 'lucide-react';
+import { User, Settings, Users, Star, Sliders } from 'lucide-react';
 import WhisperEngine from './components/WhisperEngine';
 import Lubometer from './components/Lubometer';
 import PsychologicalDials from './components/PsychologicalDials';
 import TruthIndex from './components/TruthIndex';
 import RedFlags from './components/RedFlags';
 import TopObjections from './components/TopObjections';
+import AdminPanel from './components/AdminPanel';
+import { useSettings } from './contexts/SettingsContext';
 
 // Memoized versions of expensive components to avoid unnecessary re-renders
 const MemoizedLubometer = memo(Lubometer);
@@ -139,10 +141,11 @@ function upsertRollingDials(prev: PsychologicalDial[], incoming: PsychologicalDi
 
 function App() {
   const [selectedObjection, setSelectedObjection] = useState<string | null>(null);
-  const [view, setView] = useState<'dashboard' | 'profile' | 'closer-profile' | 'manager-dashboard'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'profile' | 'closer-profile' | 'manager-dashboard' | 'admin'>('dashboard');
   const [userRole] = useState<'closer' | 'manager'>('closer');
   const [showPricing, setShowPricing] = useState(false);
   const [showFoundingMember, setShowFoundingMember] = useState(false);
+  const { settings } = useSettings();
   
   // Real-time analysis state - start empty, only show real AI data
   const [objections, setObjections] = useState<Objection[]>([]);
@@ -299,9 +302,9 @@ function App() {
   const handleTranscript = useCallback((text: string, isFinal: boolean) => {
     if (wsClientRef && text.trim()) {
       console.log(`Transcript (${isFinal ? 'final' : 'interim'}):`, text);
-      wsClientRef.sendTranscript(text, 'prospect', isFinal);
+      wsClientRef.sendTranscript(text, 'prospect', isFinal, settings);
     }
-  }, [wsClientRef]);
+  }, [wsClientRef, settings]);
 
   const handleRecordingStateChange = useCallback((recording: boolean) => {
     setIsRecording(recording);
@@ -334,6 +337,10 @@ function App() {
         onBack={() => setView('dashboard')}
       />
     );
+  }
+
+  if (view === 'admin') {
+    return <AdminPanel onBack={() => setView('dashboard')} />;
   }
 
   if (view === 'manager-dashboard') {
@@ -373,6 +380,13 @@ function App() {
                 onTranscript={handleTranscript}
                 onRecordingStateChange={handleRecordingStateChange}
               />
+              <button
+                onClick={() => setView('admin')}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600/60 to-cyan-600/60 hover:from-purple-600 hover:to-cyan-600 border border-purple-500/50 rounded-lg transition-all group"
+              >
+                <Sliders className="w-4 h-4 text-white" />
+                <span className="text-white text-sm font-medium">Admin</span>
+              </button>
               <button
                 onClick={() => setView('manager-dashboard')}
                 className="flex items-center gap-2 px-4 py-2 bg-gray-800/60 hover:bg-gray-800 border border-gray-700/50 rounded-lg transition-all group"

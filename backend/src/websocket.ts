@@ -3,6 +3,12 @@ import type { Server } from 'http';
 import type { AnalysisResult, TranscriptChunk } from './types/analysis.js';
 import { GPTConversationAnalyzer } from './services/gptAnalyzer.js';
 
+interface AdminSettings {
+  pillarWeights?: { id: string; weight: number }[];
+  priceTiers?: { label: string; price: number }[];
+  customScriptPrompt?: string;
+}
+
 interface ClientSession {
   ws: WebSocket;
   sessionId: string;
@@ -15,6 +21,8 @@ interface ClientSession {
   pendingAnalysis: boolean;
   // Monotonic run ID so frontend can ignore stale updates
   currentRunId: number;
+  // Admin settings from frontend
+  adminSettings?: AdminSettings;
 }
 
 export class ConversationWebSocketServer {
@@ -91,6 +99,11 @@ export class ConversationWebSocketServer {
           const speaker = message.speaker || 'unknown';
           const timestamp = Date.now();
           
+          // Update admin settings if provided
+          if (message.settings) {
+            session.adminSettings = message.settings;
+          }
+          
           // Add to session transcript
           session.transcript.push({
             text: message.text,
@@ -115,8 +128,19 @@ export class ConversationWebSocketServer {
         }
         break;
 
+      case 'settings':
+        // Update admin settings
+        if (message.settings) {
+          session.adminSettings = message.settings;
+          console.log(`[${session.sessionId}] Admin settings updated`);
+        }
+        break;
+
       case 'analyze':
         // Trigger immediate analysis (non-blocking)
+        if (message.settings) {
+          session.adminSettings = message.settings;
+        }
         console.log(`[${session.sessionId}] Manual analysis requested`);
         this.scheduleAnalysis(session);
         break;
@@ -177,8 +201,8 @@ export class ConversationWebSocketServer {
         }
       };
 
-      // Analyze with progressive callbacks
-      await session.gptAnalyzer.analyzeProgressive(sendPartial);
+      // Analyze with progressive callbacks, passing admin settings
+      await session.gptAnalyzer.analyzeProgressive(sendPartial, session.adminSettings);
       
       console.log(`[${session.sessionId}] Progressive analysis completed (run ${runId})`);
     } catch (error) {

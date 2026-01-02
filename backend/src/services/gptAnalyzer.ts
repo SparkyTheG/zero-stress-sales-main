@@ -339,7 +339,7 @@ export class GPTConversationAnalyzer {
 
   // Progressive analysis - 6 PARALLEL AI models, each with specialized prompts
   // Each model ONLY analyzes what's relevant to its specific task for maximum speed
-  async analyzeProgressive(sendPartial: (type: string, data: any) => void): Promise<void> {
+  async analyzeProgressive(sendPartial: (type: string, data: any) => void, adminSettings?: any): Promise<void> {
     const transcript = this.getFullTranscript();
     
     if (!transcript || transcript.trim().length === 0) {
@@ -366,13 +366,13 @@ export class GPTConversationAnalyzer {
         return result;
       });
 
-      // Model 3: Scripts - Waits for objections, then generates 1 script per objection
+      // Model 3: Scripts - Waits for objections, then generates 2 scripts per objection
       const scriptsPromise = objectionsPromise.then(objections => {
         if (!objections || objections.length === 0) {
           console.log(`[MODEL 3 - SCRIPTS] No objections, skipping`);
           return {};
         }
-        return this.analyzeModel3_Scripts(transcript, objections).then(result => {
+        return this.analyzeModel3_Scripts(transcript, objections, adminSettings?.customScriptPrompt).then(result => {
           console.log(`[MODEL 3 - SCRIPTS] ✓ Completed in ${Date.now() - startTime}ms, ${Object.keys(result).length} scripts`);
           sendPartial('analysis_scripts', { objectionScripts: result });
           return result;
@@ -380,7 +380,7 @@ export class GPTConversationAnalyzer {
       });
 
       // Model 4: Lubometer - ONLY analyzes indicators relevant to buying readiness
-      const lubometerPromise = this.analyzeModel4_Lubometer(transcript).then(result => {
+      const lubometerPromise = this.analyzeModel4_Lubometer(transcript, adminSettings?.pillarWeights).then(result => {
         console.log(`[MODEL 4 - LUBOMETER] ✓ Completed in ${Date.now() - startTime}ms, score: ${result.finalScore}`);
         sendPartial('analysis_partial', { 
           lubometer: result,
@@ -678,10 +678,10 @@ Return empty array if NO objections found: {"objections": []}`
 
   // ============================================================
   // MODEL 3: PERSONALIZED HANDLING SCRIPTS
-  // Generates 1 script per objection - CACHED
+  // Generates 2 scripts per objection - CACHED
   // ============================================================
-  private async analyzeModel3_Scripts(transcript: string, objections: any[]): Promise<Record<string, any>> {
-    return this.generateObjectionScriptsModel(transcript, objections);
+  private async analyzeModel3_Scripts(transcript: string, objections: any[], customPrompt?: string): Promise<Record<string, any>> {
+    return this.generateObjectionScriptsModel(transcript, objections, customPrompt);
   }
 
   // ============================================================
@@ -820,9 +820,21 @@ Return empty array if NO objections found: {"objections": []}`
   // Uses 7 PARALLEL AI models - one per pillar for faster scoring
   // Self-contained: scores its own indicators, then calculates
   // ============================================================
-  private async analyzeModel4_Lubometer(transcript: string): Promise<any> {
+  private async analyzeModel4_Lubometer(transcript: string, customWeights?: { id: string; weight: number }[]): Promise<any> {
     try {
       const startTime = Date.now();
+      
+      // Build weight map from custom weights or use defaults
+      const defaultWeights: Record<string, number> = { P1: 1.5, P2: 1.0, P3: 1.0, P4: 1.5, P5: 1.0, P6: 1.5, P7: 1.5 };
+      const weightMap: Record<string, number> = { ...defaultWeights };
+      if (customWeights && Array.isArray(customWeights)) {
+        customWeights.forEach(w => {
+          if (w.id && typeof w.weight === 'number') {
+            weightMap[w.id] = w.weight;
+          }
+        });
+      }
+      console.log(`[MODEL 4] Using weights:`, Object.entries(weightMap).map(([k, v]) => `${k}:${v}`).join(', '));
       
       // Step 1: Score indicators using 7 PARALLEL AI models (one per pillar)
       console.log(`[MODEL 4] Starting 7 parallel pillar scorers...`);
@@ -844,12 +856,13 @@ Return empty array if NO objections found: {"objections": []}`
       const indicators = this.validateIndicators(allIndicators);
       console.log(`[MODEL 4] Validated ${indicators.length} indicators from parallel scoring`);
 
-      // Step 2: Calculate using local calculators (no CSV dependency)
+      // Step 2: Calculate pillars with custom weights
       const pillarCalculator = getPillarCalculator();
       const truthIndexCalculator = getTruthIndexCalculator();
       const lubometerCalculator = getLubometerCalculator();
 
-      const pillars = await pillarCalculator.calculatePillars(indicators);
+      // Calculate pillars with dynamic weights
+      const pillars = await pillarCalculator.calculatePillarsWithWeights(indicators, weightMap);
       console.log(`[MODEL 4] Calculated ${pillars.length} pillars:`, pillars.map(p => `${p.id}=${p.averageScore.toFixed(1)}`).join(', '));
       
       const truthIndex = await truthIndexCalculator.calculate(pillars, indicators);
@@ -905,7 +918,7 @@ Return empty array if NO objections found: {"objections": []}`
           id: p.id,
           name: p.name,
           score: p.averageScore,
-          weight: ['P1', 'P4', 'P6', 'P7'].includes(p.id) ? 1.5 : 1.0
+          weight: weightMap[p.id] ?? 1.0
         })),
         indicators
       };
@@ -1101,8 +1114,8 @@ Return empty array if NO red flags: {"redFlags": []}`
   }
 
   // Model 3: Generate Personalized Handling Scripts (separate model)
-  // Generates 1 script per detected objection - CACHED to avoid regeneration
-  private async generateObjectionScriptsModel(transcript: string, objections: any[]): Promise<Record<string, any>> {
+  // Generates 2 scripts per detected objection - CACHED to avoid regeneration
+  private async generateObjectionScriptsModel(transcript: string, objections: any[], customPrompt?: string): Promise<Record<string, any>> {
     // If no objections, return empty
     if (!objections || objections.length === 0) {
       return {};
@@ -1143,6 +1156,11 @@ Return empty array if NO red flags: {"redFlags": []}`
 
     console.log(`[CACHE] ${objections.length - newObjections.length} cached, ${newObjections.length} new objections need scripts`);
 
+    // Build custom prompt addition if provided
+    const customPromptSection = customPrompt && customPrompt.trim() 
+      ? `\n\n⭐ ADDITIONAL CONTEXT FROM ADMIN: ${customPrompt.trim()}\n`
+      : '';
+
     try {
       const response = await this.openai.chat.completions.create({
         model: 'gpt-4o',
@@ -1155,14 +1173,14 @@ Return empty array if NO red flags: {"redFlags": []}`
 - Use the EXACT objection text as the title
 - Do NOT substitute with different objections
 - Do NOT use examples from training - use the ACTUAL objections passed to you
-
+${customPromptSection}
 SCRIPT WRITING TECHNIQUES (use as inspiration, write YOUR OWN notes):
 - Open-ended questions that guide self-discovery
 - Questions that help them realize the answer themselves  
 - Challenge their patterns/thinking when appropriate
 - Direct, bold statements when needed
 
-For EACH DETECTED OBJECTION, create a script with:
+For EACH DETECTED OBJECTION, create TWO different scripts with:
 1. Title: The EXACT objection text in quotes (copy from input)
 2. Dial Trigger: Which psychological patterns triggered this
 3. Steps: EXACTLY 2 conversation steps with:
@@ -1176,6 +1194,8 @@ Script requirements:
 - Reference what the prospect actually said
 - Personalize based on conversation context
 - Guide through objection to resolution
+- Script 1: More empathetic/soft approach
+- Script 2: More direct/challenging approach
 
 RETURN JSON:
 {
@@ -1184,26 +1204,31 @@ RETURN JSON:
       "title": "[EXACT objection text from input]",
       "dialTrigger": "...",
       "steps": [...]
+    },
+    "[objectionId]_2": {
+      "title": "[EXACT objection text from input]",
+      "dialTrigger": "...",
+      "steps": [...]
     }
   }
 }
 
-Generate EXACTLY 1 script per objection. Key must be: objId_1.`
+Generate EXACTLY 2 scripts per objection. Keys must be: objId_1 and objId_2.`
           },
           {
             role: 'user',
-            content: `⚠️ THESE ARE THE EXACT OBJECTIONS - use these exact texts as titles:\n${newObjections.map(o => `- ID: ${o.id}, TEXT: "${o.text}"`).join('\n')}\n\n---\nCONVERSATION CONTEXT:\n${transcript}\n---\n\nGENERATE SCRIPTS FOR THESE EXACT OBJECTIONS:
-${newObjections.map(o => `• "${o.text}" → Generate script: ${o.id}_1`).join('\n')}
+            content: `⚠️ THESE ARE THE EXACT OBJECTIONS - use these exact texts as titles:\n${newObjections.map(o => `- ID: ${o.id}, TEXT: "${o.text}"`).join('\n')}\n\n---\nCONVERSATION CONTEXT:\n${transcript}\n---\n\nGENERATE 2 SCRIPTS FOR EACH OBJECTION:
+${newObjections.map(o => `• "${o.text}" → Generate scripts: ${o.id}_1 (empathetic) and ${o.id}_2 (direct)`).join('\n')}
 
 CRITICAL:
 - The script TITLE must be the EXACT objection text from above
 - Do NOT invent different objections - use EXACTLY what was detected
-- 1 script per objection
+- 2 scripts per objection (one empathetic, one direct)
 - Personalize based on conversation context`
           }
         ],
         temperature: 0.3,
-        max_tokens: 2500,
+        max_tokens: 4000,
         response_format: { type: 'json_object' }
       });
 

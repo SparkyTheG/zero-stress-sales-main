@@ -13,9 +13,17 @@ const PILLAR_DEFINITIONS = [
 
 export class PillarCalculator {
   async calculatePillars(indicators: IndicatorScore[]): Promise<PillarScore[]> {
+    return this.calculatePillarsWithWeights(indicators);
+  }
+
+  // Calculate pillars with custom weights from admin settings
+  async calculatePillarsWithWeights(indicators: IndicatorScore[], customWeights?: Record<string, number>): Promise<PillarScore[]> {
     const pillarScores: PillarScore[] = [];
 
     for (const pillarDef of PILLAR_DEFINITIONS) {
+      // Use custom weight if provided, otherwise use default
+      const weight = customWeights?.[pillarDef.id] ?? pillarDef.weight;
+      
       // Get indicators for this pillar by ID
       const pillarIndicators = indicators.filter(ind => 
         pillarDef.indicatorIds.includes(ind.id) || ind.pillarId === pillarDef.id
@@ -27,8 +35,8 @@ export class PillarCalculator {
           id: pillarDef.id,
           name: pillarDef.name,
           averageScore: 5, // Default neutral score
-          weightedScore: 5 * pillarDef.weight,
-          weight: pillarDef.weight,
+          weightedScore: 5 * weight,
+          weight: weight,
           indicators: [],
         });
         continue;
@@ -47,14 +55,14 @@ export class PillarCalculator {
       }
 
       // Apply pillar weight
-      const weightedScore = finalAverage * pillarDef.weight;
+      const weightedScore = finalAverage * weight;
 
       pillarScores.push({
         id: pillarDef.id,
         name: pillarDef.name,
         averageScore: finalAverage,
         weightedScore: weightedScore,
-        weight: pillarDef.weight,
+        weight: weight,
         indicators: pillarIndicators,
       });
     }
