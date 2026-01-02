@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
-import { ArrowLeft, Settings, DollarSign, Scale, MessageSquare, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Settings, DollarSign, Scale, MessageSquare, RotateCcw, Save, Check, AlertCircle } from 'lucide-react';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -73,7 +73,7 @@ interface AdminPanelProps {
 }
 
 export default function AdminPanel({ onBack }: AdminPanelProps) {
-  const { settings, updatePillarWeight, updatePriceTier, updateCustomPrompt, resetToDefaults } = useSettings();
+  const { settings, updatePillarWeight, updatePriceTier, updateCustomPrompt, resetToDefaults, saveToSupabase, saving, lastSaved } = useSettings();
   const { user, loading, signInWithPassword, signUpWithPassword, signOut } = useAuth();
 
   const [email, setEmail] = useState('');
@@ -81,6 +81,20 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   const [authError, setAuthError] = useState<string | null>(null);
   const [authBusy, setAuthBusy] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  const handleSave = async () => {
+    setSaveError(null);
+    setSaveSuccess(false);
+    const result = await saveToSupabase();
+    if (result.success) {
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } else {
+      setSaveError(result.error || 'Failed to save');
+    }
+  };
 
   const calculateMaxScore = () => {
     return settings.pillarWeights.reduce((sum, p) => sum + p.weight * 10, 0);
@@ -139,12 +153,34 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
                 <span className="text-gray-400">Auth:</span> {authStatusLabel}
               </div>
               {user ? (
-                <button
-                  onClick={() => signOut()}
-                  className="px-4 py-2 bg-gray-800/60 hover:bg-gray-700 border border-gray-700/50 rounded-lg transition-all text-gray-200 text-sm font-medium"
-                >
-                  Sign out
-                </button>
+                <>
+                  <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition-all ${
+                      saveSuccess
+                        ? 'bg-emerald-500/30 border-emerald-500/60 text-emerald-300'
+                        : 'bg-gradient-to-r from-emerald-600/60 to-cyan-600/60 hover:from-emerald-600 hover:to-cyan-600 border-emerald-500/50 text-white'
+                    } disabled:opacity-60 disabled:cursor-not-allowed`}
+                  >
+                    {saving ? (
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : saveSuccess ? (
+                      <Check className="w-4 h-4" />
+                    ) : (
+                      <Save className="w-4 h-4" />
+                    )}
+                    <span className="text-sm font-medium">
+                      {saving ? 'Saving...' : saveSuccess ? 'Saved!' : 'Save Settings'}
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => signOut()}
+                    className="px-4 py-2 bg-gray-800/60 hover:bg-gray-700 border border-gray-700/50 rounded-lg transition-all text-gray-200 text-sm font-medium"
+                  >
+                    Sign out
+                  </button>
+                </>
               ) : null}
               <button
                 onClick={resetToDefaults}
@@ -353,9 +389,24 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
           </div>
         </div>
 
+        {/* Save Error */}
+        {saveError && (
+          <div className="mt-8 flex items-center gap-3 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-300">
+            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            <span className="text-sm">{saveError}</span>
+          </div>
+        )}
+
         {/* Settings Summary */}
         <div className="mt-8 backdrop-blur-xl bg-gray-900/40 border border-gray-700/50 rounded-2xl p-6">
-          <h3 className="text-lg font-bold text-white mb-4">Current Configuration Summary</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-white">Current Configuration Summary</h3>
+            {lastSaved && (
+              <span className="text-sm text-gray-400">
+                Last saved: {lastSaved.toLocaleTimeString()}
+              </span>
+            )}
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="p-4 bg-gray-800/40 rounded-xl">
               <div className="text-sm text-gray-400 mb-1">Pillar Weights</div>

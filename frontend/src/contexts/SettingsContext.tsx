@@ -43,6 +43,9 @@ interface SettingsContextType {
   updatePriceTier: (index: number, price: number, label?: string) => void;
   updateCustomPrompt: (prompt: string) => void;
   resetToDefaults: () => void;
+  saveToSupabase: () => Promise<{ success: boolean; error?: string }>;
+  saving: boolean;
+  lastSaved: Date | null;
 }
 
 const SettingsContext = createContext<SettingsContextType | null>(null);
@@ -91,6 +94,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const hydratingRef = useRef(false);
   const saveTimerRef = useRef<number | null>(null);
   const lastSavedUserIdRef = useRef<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
   // Hydrate from Supabase when the user logs in (or changes)
   useEffect(() => {
@@ -127,41 +132,47 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     };
   }, [userId, mergeWithDefaults]);
 
-  // Save to localStorage whenever settings change
+  // Save to localStorage whenever settings change (local backup)
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
     } catch (e) {
-      console.error('Failed to save settings:', e);
+      console.error('Failed to save settings to localStorage:', e);
+    }
+  }, [settings]);
+
+  // Manual save to Supabase
+  const saveToSupabase = async (): Promise<{ success: boolean; error?: string }> => {
+    if (!userId) {
+      return { success: false, error: 'You must be signed in to save settings' };
     }
 
-    // Also save to Supabase if logged in (debounced)
-    if (!userId) return;
-    if (hydratingRef.current) return;
-
-    // If the user just changed (login/logout), don't write stale settings immediately.
-    if (lastSavedUserIdRef.current && lastSavedUserIdRef.current !== userId) {
-      // allow next change to save
-    }
-
-    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = window.setTimeout(async () => {
-      try {
-        const payload = {
-          user_id: userId,
-          settings,
-          updated_at: new Date().toISOString(),
-        };
-        const { error } = await supabase
-          .from('user_settings')
-          .upsert(payload);
-        if (error) console.error('[settings] upsert error:', error);
-        lastSavedUserIdRef.current = userId;
-      } catch (err) {
-        console.error('[settings] upsert exception:', err);
+    setSaving(true);
+    try {
+      const payload = {
+        user_id: userId,
+        settings,
+        updated_at: new Date().toISOString(),
+      };
+      const { error } = await supabase
+        .from('user_settings')
+        .upsert(payload);
+      
+      if (error) {
+        console.error('[settings] upsert error:', error);
+        return { success: false, error: error.message };
       }
-    }, 600);
-  }, [settings, userId]);
+      
+      lastSavedUserIdRef.current = userId;
+      setLastSaved(new Date());
+      return { success: true };
+    } catch (err: any) {
+      console.error('[settings] upsert exception:', err);
+      return { success: false, error: err?.message || 'Unknown error' };
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const updatePillarWeight = (pillarId: string, weight: number) => {
     setSettings(prev => ({
@@ -200,6 +211,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         updatePriceTier,
         updateCustomPrompt,
         resetToDefaults,
+        saveToSupabase,
+        saving,
+        lastSaved,
       }}
     >
       {children}
