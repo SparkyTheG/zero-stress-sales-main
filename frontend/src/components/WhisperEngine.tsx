@@ -16,6 +16,12 @@ export default function WhisperEngine({
   scripts,
   onObjectionClick,
 }: WhisperEngineProps) {
+  const clampPercent = (value: unknown) => {
+    const n = typeof value === 'number' ? value : Number(value);
+    if (!Number.isFinite(n)) return 0;
+    return Math.max(0, Math.min(100, n));
+  };
+
   const handleObjectionClick = (id: string) => {
     onSelectObjection(id);
     if (onObjectionClick) {
@@ -77,14 +83,16 @@ export default function WhisperEngine({
         </p>
 
         <div className="space-y-3 mb-8">
-          {objections.map((objection, index) => (
+          {objections.map((objection, index) => {
+            const probability = Math.round(clampPercent(objection.probability));
+            return (
             <button
               key={objection.id}
               onClick={() => handleObjectionClick(objection.id)}
               className={`w-full text-left p-4 rounded-xl border transition-all duration-300 hover:scale-105 hover:glow-teal-strong ${
                 selectedObjection === objection.id
                   ? 'bg-gradient-to-r from-teal-500/30 to-cyan-500/30 border-teal-400/60 glow-teal-strong'
-                  : `bg-gradient-to-r ${getColorClass(objection.probability)} hover:border-teal-400/40`
+                  : `bg-gradient-to-r ${getColorClass(probability)} hover:border-teal-400/40`
               }`}
             >
               <div className="flex items-center justify-between mb-2">
@@ -92,18 +100,19 @@ export default function WhisperEngine({
                   <span className="text-white/60 font-semibold">{index + 1}</span>
                   <span className="text-white font-medium">{objection.text}</span>
                 </div>
-                <span className={`text-lg font-bold ${getTextColor(objection.probability)}`}>
-                  {objection.probability}%
+                <span className={`text-lg font-bold ${getTextColor(probability)}`}>
+                  {probability}%
                 </span>
               </div>
               <div className="w-full bg-gray-800/50 rounded-full h-2 overflow-hidden">
                 <div
-                  className={`h-full ${getBarColor(objection.probability)} transition-all duration-500`}
-                  style={{ width: `${objection.probability}%` }}
+                  className={`h-full ${getBarColor(probability)} transition-all duration-500`}
+                  style={{ width: `${probability}%` }}
                 ></div>
               </div>
             </button>
-          ))}
+            );
+          })}
         </div>
 
         {script ? (

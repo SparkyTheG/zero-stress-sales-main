@@ -7,6 +7,12 @@ interface TopObjectionsProps {
 }
 
 export default function TopObjections({ objections, highlightedObjection }: TopObjectionsProps) {
+  const clampPercent = (value: unknown) => {
+    const n = typeof value === 'number' ? value : Number(value);
+    if (!Number.isFinite(n)) return 0;
+    return Math.max(0, Math.min(100, n));
+  };
+
   const getColorClass = (probability: number) => {
     if (probability >= 70) return 'from-cyan-500 to-blue-500';
     if (probability >= 50) return 'from-teal-500 to-cyan-500';
@@ -25,7 +31,9 @@ export default function TopObjections({ objections, highlightedObjection }: TopO
 
       {objections.length > 0 ? (
         <div className="space-y-3">
-          {objections.slice(0, 5).map((objection) => (
+          {objections.slice(0, 5).map((objection) => {
+            const probability = Math.round(clampPercent(objection.probability));
+            return (
             <div
               key={objection.id}
               id={`objection-${objection.id}`}
@@ -37,18 +45,19 @@ export default function TopObjections({ objections, highlightedObjection }: TopO
             >
               <div className="flex items-center justify-between mb-2">
                 <span className="text-white font-medium text-sm">{objection.text}</span>
-                <span className={`text-lg font-bold bg-gradient-to-r ${getColorClass(objection.probability)} bg-clip-text text-transparent ml-3`}>
-                  {objection.probability}%
+                <span className={`text-lg font-bold bg-gradient-to-r ${getColorClass(probability)} bg-clip-text text-transparent ml-3`}>
+                  {probability}%
                 </span>
               </div>
               <div className="w-full bg-gray-800/50 rounded-full h-2 overflow-hidden">
                 <div
-                  className={`h-full bg-gradient-to-r ${getColorClass(objection.probability)} transition-all duration-500`}
-                  style={{ width: `${objection.probability}%` }}
+                  className={`h-full bg-gradient-to-r ${getColorClass(probability)} transition-all duration-500`}
+                  style={{ width: `${probability}%` }}
                 ></div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <div className="text-center py-8">

@@ -29,6 +29,71 @@ import { salesManagerProfile } from './data/managerData';
 import { getWebSocketClient } from './lib/websocket';
 import type { AnalysisResult, Objection, PsychologicalDial, RedFlag, LubometerTier } from './types';
 
+function clampPercent(value: unknown): number {
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(100, n));
+}
+
+function normalizeKey(text: unknown): string {
+  return String(text ?? '').toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
+function upsertRollingObjections(prev: Objection[], incoming: Objection[], limit = 5): Objection[] {
+  if (!Array.isArray(incoming) || incoming.length === 0) return prev;
+
+  const next = [...prev];
+  const indexByKey = new Map<string, number>();
+  next.forEach((o, idx) => indexByKey.set(normalizeKey(o.text), idx));
+
+  for (const raw of incoming) {
+    const key = normalizeKey(raw.text);
+    if (!key) continue;
+    const obj: Objection = {
+      ...raw,
+      probability: Math.round(clampPercent(raw.probability)),
+    };
+
+    const existingIdx = indexByKey.get(key);
+    if (existingIdx !== undefined) {
+      next[existingIdx] = obj; // update in place (keep position)
+    } else {
+      next.push(obj); // new objection goes to end (most recent)
+      // if over limit, drop oldest until within limit, then rebuild index
+      while (next.length > limit) next.shift();
+      indexByKey.clear();
+      next.forEach((o, idx) => indexByKey.set(normalizeKey(o.text), idx));
+    }
+  }
+
+  return next.slice(-limit);
+}
+
+function upsertRollingDials(prev: PsychologicalDial[], incoming: PsychologicalDial[], limit = 5): PsychologicalDial[] {
+  if (!Array.isArray(incoming) || incoming.length === 0) return prev;
+
+  const next = [...prev];
+  const indexByKey = new Map<string, number>();
+  next.forEach((d, idx) => indexByKey.set(normalizeKey(d.name), idx));
+
+  for (const dial of incoming) {
+    const key = normalizeKey(dial.name);
+    if (!key) continue;
+
+    const existingIdx = indexByKey.get(key);
+    if (existingIdx !== undefined) {
+      next[existingIdx] = dial; // update in place
+    } else {
+      next.push(dial);
+      while (next.length > limit) next.shift();
+      indexByKey.clear();
+      next.forEach((d, idx) => indexByKey.set(normalizeKey(d.name), idx));
+    }
+  }
+
+  return next.slice(-limit);
+}
+
 function App() {
   const [selectedObjection, setSelectedObjection] = useState<string | null>(null);
   const [view, setView] = useState<'dashboard' | 'profile' | 'closer-profile' | 'manager-dashboard'>('dashboard');
@@ -73,13 +138,11 @@ function App() {
         } else if (type === 'partial') {
           // Progressive partial updates - update state incrementally
           if (data.psychologicalDials && Array.isArray(data.psychologicalDials) && data.psychologicalDials.length > 0) {
-            // Take incoming dials directly, cap at 5
-            setPsychologicalDials(data.psychologicalDials.slice(0, 5));
+            setPsychologicalDials(prev => upsertRollingDials(prev, data.psychologicalDials, 5));
           }
           
           if (data.objections && Array.isArray(data.objections) && data.objections.length > 0) {
-            // Take incoming objections directly, cap at 5
-            setObjections(data.objections.slice(0, 5));
+            setObjections(prev => upsertRollingObjections(prev, data.objections, 5));
           }
           
           if (data.lubometer) {
@@ -112,10 +175,10 @@ function App() {
         
         // Fallback: Update all at once if full analysis received
         if (data.objections && Array.isArray(data.objections) && data.objections.length > 0) {
-          setObjections(data.objections.slice(0, 5));
+          setObjections(prev => upsertRollingObjections(prev, data.objections, 5));
         }
         if (data.psychologicalDials && Array.isArray(data.psychologicalDials) && data.psychologicalDials.length > 0) {
-          setPsychologicalDials(data.psychologicalDials.slice(0, 5));
+          setPsychologicalDials(prev => upsertRollingDials(prev, data.psychologicalDials, 5));
         }
         // Apply same "anti-flap" behavior for red flags on full analysis payloads
         if (Array.isArray(data.redFlags)) {
@@ -153,6 +216,13 @@ function App() {
       console.error('Error initializing WebSocket:', error);
     }
   }, []);
+
+  // If the selected objection disappears from the rolling window, clear selection
+  useEffect(() => {
+    if (selectedObjection && !objections.some(o => o.id === selectedObjection)) {
+      setSelectedObjection(null);
+    }
+  }, [selectedObjection, objections]);
 
   // Use only AI-generated scripts - no mock data fallback
   // Scripts are keyed as obj1_1, obj1_2, obj1_3 (3 per objection)
