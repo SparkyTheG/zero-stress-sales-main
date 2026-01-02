@@ -678,7 +678,7 @@ Return empty array if NO objections found: {"objections": []}`
 
   // ============================================================
   // MODEL 3: PERSONALIZED HANDLING SCRIPTS
-  // Generates 2 scripts per objection - CACHED
+  // Generates 1 script per objection - CACHED
   // ============================================================
   private async analyzeModel3_Scripts(transcript: string, objections: any[], customPrompt?: string): Promise<Record<string, any>> {
     return this.generateObjectionScriptsModel(transcript, objections, customPrompt);
@@ -1114,7 +1114,7 @@ Return empty array if NO red flags: {"redFlags": []}`
   }
 
   // Model 3: Generate Personalized Handling Scripts (separate model)
-  // Generates 2 scripts per detected objection - CACHED to avoid regeneration
+  // Generates 1 script per detected objection - CACHED to avoid regeneration
   private async generateObjectionScriptsModel(transcript: string, objections: any[], customPrompt?: string): Promise<Record<string, any>> {
     // If no objections, return empty
     if (!objections || objections.length === 0) {
@@ -1180,7 +1180,7 @@ SCRIPT WRITING TECHNIQUES (use as inspiration, write YOUR OWN notes):
 - Challenge their patterns/thinking when appropriate
 - Direct, bold statements when needed
 
-For EACH DETECTED OBJECTION, create TWO different scripts with:
+For EACH DETECTED OBJECTION, create a script with:
 1. Title: The EXACT objection text in quotes (copy from input)
 2. Dial Trigger: Which psychological patterns triggered this
 3. Steps: EXACTLY 2 conversation steps with:
@@ -1194,8 +1194,6 @@ Script requirements:
 - Reference what the prospect actually said
 - Personalize based on conversation context
 - Guide through objection to resolution
-- Script 1: More empathetic/soft approach
-- Script 2: More direct/challenging approach
 
 RETURN JSON:
 {
@@ -1204,31 +1202,26 @@ RETURN JSON:
       "title": "[EXACT objection text from input]",
       "dialTrigger": "...",
       "steps": [...]
-    },
-    "[objectionId]_2": {
-      "title": "[EXACT objection text from input]",
-      "dialTrigger": "...",
-      "steps": [...]
     }
   }
 }
 
-Generate EXACTLY 2 scripts per objection. Keys must be: objId_1 and objId_2.`
+Generate EXACTLY 1 script per objection. Key must be: objId_1.`
           },
           {
             role: 'user',
-            content: `⚠️ THESE ARE THE EXACT OBJECTIONS - use these exact texts as titles:\n${newObjections.map(o => `- ID: ${o.id}, TEXT: "${o.text}"`).join('\n')}\n\n---\nCONVERSATION CONTEXT:\n${transcript}\n---\n\nGENERATE 2 SCRIPTS FOR EACH OBJECTION:
-${newObjections.map(o => `• "${o.text}" → Generate scripts: ${o.id}_1 (empathetic) and ${o.id}_2 (direct)`).join('\n')}
+            content: `⚠️ THESE ARE THE EXACT OBJECTIONS - use these exact texts as titles:\n${newObjections.map(o => `- ID: ${o.id}, TEXT: "${o.text}"`).join('\n')}\n\n---\nCONVERSATION CONTEXT:\n${transcript}\n---\n\nGENERATE SCRIPTS FOR THESE EXACT OBJECTIONS:
+${newObjections.map(o => `• "${o.text}" → Generate script: ${o.id}_1`).join('\n')}
 
 CRITICAL:
 - The script TITLE must be the EXACT objection text from above
 - Do NOT invent different objections - use EXACTLY what was detected
-- 2 scripts per objection (one empathetic, one direct)
+- 1 script per objection
 - Personalize based on conversation context`
           }
         ],
         temperature: 0.3,
-        max_tokens: 4000,
+        max_tokens: 2500,
         response_format: { type: 'json_object' }
       });
 
