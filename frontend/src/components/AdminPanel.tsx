@@ -1,5 +1,71 @@
+import { useState, useEffect } from 'react';
 import { ArrowLeft, Settings, DollarSign, Scale, MessageSquare, RotateCcw } from 'lucide-react';
 import { useSettings } from '../contexts/SettingsContext';
+
+// Separate component for price tier input with local state for smooth editing
+function PriceTierInput({ 
+  index, 
+  label, 
+  price, 
+  onUpdate 
+}: { 
+  index: number; 
+  label: string; 
+  price: number; 
+  onUpdate: (index: number, price: number, label?: string) => void;
+}) {
+  const [localLabel, setLocalLabel] = useState(label);
+  const [localPrice, setLocalPrice] = useState(String(price));
+
+  // Sync from parent when props change (e.g., reset to defaults)
+  useEffect(() => {
+    setLocalLabel(label);
+    setLocalPrice(String(price));
+  }, [label, price]);
+
+  const handleLabelBlur = () => {
+    onUpdate(index, price, localLabel);
+  };
+
+  const handlePriceBlur = () => {
+    const parsed = parseInt(localPrice) || 0;
+    setLocalPrice(String(parsed)); // Normalize display
+    onUpdate(index, parsed, undefined);
+  };
+
+  return (
+    <div className="p-4 bg-gray-800/40 border border-gray-700/40 rounded-xl">
+      <div className="flex items-center gap-4">
+        <div className="flex-1">
+          <label className="block text-sm text-gray-400 mb-1">Label</label>
+          <input
+            type="text"
+            value={localLabel}
+            onChange={(e) => setLocalLabel(e.target.value)}
+            onBlur={handleLabelBlur}
+            className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white focus:border-emerald-500 focus:outline-none"
+          />
+        </div>
+        <div className="flex-1">
+          <label className="block text-sm text-gray-400 mb-1">Price ($)</label>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={localPrice}
+            onChange={(e) => setLocalPrice(e.target.value.replace(/[^0-9]/g, ''))}
+            onBlur={handlePriceBlur}
+            className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white font-mono focus:border-emerald-500 focus:outline-none"
+          />
+        </div>
+      </div>
+      <div className="mt-3 text-right">
+        <span className="text-emerald-400 font-bold text-lg">
+          ${(parseInt(localPrice) || 0).toLocaleString()}
+        </span>
+      </div>
+    </div>
+  );
+}
 
 interface AdminPanelProps {
   onBack: () => void;
@@ -119,38 +185,13 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
 
             <div className="space-y-4">
               {settings.priceTiers.map((tier, index) => (
-                <div
+                <PriceTierInput
                   key={index}
-                  className="p-4 bg-gray-800/40 border border-gray-700/40 rounded-xl"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="flex-1">
-                      <label className="block text-sm text-gray-400 mb-1">Label</label>
-                      <input
-                        type="text"
-                        value={tier.label}
-                        onChange={(e) => updatePriceTier(index, tier.price, e.target.value)}
-                        className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white focus:border-emerald-500 focus:outline-none"
-                      />
-                    </div>
-                    <div className="flex-1">
-                      <label className="block text-sm text-gray-400 mb-1">Price ($)</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="100"
-                        value={tier.price}
-                        onChange={(e) => updatePriceTier(index, parseInt(e.target.value) || 0)}
-                        className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white font-mono focus:border-emerald-500 focus:outline-none"
-                      />
-                    </div>
-                  </div>
-                  <div className="mt-3 text-right">
-                    <span className="text-emerald-400 font-bold text-lg">
-                      ${tier.price.toLocaleString()}
-                    </span>
-                  </div>
-                </div>
+                  index={index}
+                  label={tier.label}
+                  price={tier.price}
+                  onUpdate={updatePriceTier}
+                />
               ))}
             </div>
           </div>

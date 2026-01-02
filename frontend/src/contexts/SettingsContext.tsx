@@ -90,7 +90,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setSettings(prev => ({
       ...prev,
       priceTiers: prev.priceTiers.map((t, i) =>
-        i === index ? { ...t, price: Math.max(0, price), ...(label ? { label } : {}) } : t
+        i === index ? { ...t, price: Math.max(0, price), ...(label !== undefined ? { label } : {}) } : t
       ),
     }));
   };
