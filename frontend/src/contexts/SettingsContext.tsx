@@ -167,7 +167,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         return { success: false, error: error.message };
       }
       
-      lastSavedUserIdRef.current = userId;
       setLastSaved(new Date());
       return { success: true };
     } catch (err: any) {
