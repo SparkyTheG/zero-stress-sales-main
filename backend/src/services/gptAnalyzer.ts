@@ -1193,6 +1193,7 @@ Script requirements:
 - Reference what the prospect actually said
 - Personalize based on conversation context
 - Guide through objection to resolution
+- Do NOT invent or assume names - only use names if explicitly mentioned in conversation
 
 RETURN JSON:
 {
