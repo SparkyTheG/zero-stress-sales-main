@@ -49,69 +49,6 @@ function App() {
   const [isRecording, setIsRecording] = useState(false);
   const [wsClientRef, setWsClientRef] = useState<ReturnType<typeof getWebSocketClient> | null>(null);
 
-  // Normalize text for comparison (lowercase, trim, collapse whitespace)
-  const normalizeText = (text: string) => text.toLowerCase().trim().replace(/\s+/g, ' ');
-
-  // For objections: always accept the latest batch from AI, keep max 5
-  // This ensures new objections come through and old ones get replaced
-  const updateObjections = useCallback((prev: Objection[], incoming: Objection[]): Objection[] => {
-    if (!Array.isArray(incoming) || incoming.length === 0) return prev;
-    
-    // Use text as the unique key (not ID, since AI reuses obj1, obj2, etc.)
-    const seenTexts = new Set<string>();
-    const result: Objection[] = [];
-    
-    // First, add all incoming objections (newest data)
-    for (const obj of incoming) {
-      const normalizedText = normalizeText(obj.text || '');
-      if (normalizedText && !seenTexts.has(normalizedText)) {
-        seenTexts.add(normalizedText);
-        result.push(obj);
-      }
-    }
-    
-    // Then, add previous objections that aren't duplicates of incoming
-    for (const obj of prev) {
-      const normalizedText = normalizeText(obj.text || '');
-      if (normalizedText && !seenTexts.has(normalizedText)) {
-        seenTexts.add(normalizedText);
-        result.push(obj);
-      }
-    }
-    
-    // Keep only the first 5 (newest from incoming + remaining from prev)
-    return result.slice(0, 5);
-  }, []);
-
-  // For dials: always accept the latest batch from AI, keep max 5
-  const updateDials = useCallback((prev: PsychologicalDial[], incoming: PsychologicalDial[]): PsychologicalDial[] => {
-    if (!Array.isArray(incoming) || incoming.length === 0) return prev;
-    
-    // Use name as the unique key
-    const seenNames = new Set<string>();
-    const result: PsychologicalDial[] = [];
-    
-    // First, add all incoming dials (newest data)
-    for (const dial of incoming) {
-      const normalizedName = normalizeText(dial.name || '');
-      if (normalizedName && !seenNames.has(normalizedName)) {
-        seenNames.add(normalizedName);
-        result.push(dial);
-      }
-    }
-    
-    // Then, add previous dials that aren't duplicates of incoming
-    for (const dial of prev) {
-      const normalizedName = normalizeText(dial.name || '');
-      if (normalizedName && !seenNames.has(normalizedName)) {
-        seenNames.add(normalizedName);
-        result.push(dial);
-      }
-    }
-    
-    // Keep only the first 5 (newest from incoming + remaining from prev)
-    return result.slice(0, 5);
-  }, []);
 
   useEffect(() => {
     try {
@@ -135,12 +72,14 @@ function App() {
           }
         } else if (type === 'partial') {
           // Progressive partial updates - update state incrementally
-          if (data.psychologicalDials) {
-            setPsychologicalDials(prev => updateDials(prev, data.psychologicalDials || []));
+          if (data.psychologicalDials && Array.isArray(data.psychologicalDials) && data.psychologicalDials.length > 0) {
+            // Take incoming dials directly, cap at 5
+            setPsychologicalDials(data.psychologicalDials.slice(0, 5));
           }
           
-          if (data.objections) {
-            setObjections(prev => updateObjections(prev, data.objections || []));
+          if (data.objections && Array.isArray(data.objections) && data.objections.length > 0) {
+            // Take incoming objections directly, cap at 5
+            setObjections(data.objections.slice(0, 5));
           }
           
           if (data.lubometer) {
@@ -172,8 +111,12 @@ function App() {
         console.log('Full analysis received (fallback):', data);
         
         // Fallback: Update all at once if full analysis received
-        setObjections(prev => updateObjections(prev, data.objections || []));
-        setPsychologicalDials(prev => updateDials(prev, data.psychologicalDials || []));
+        if (data.objections && Array.isArray(data.objections) && data.objections.length > 0) {
+          setObjections(data.objections.slice(0, 5));
+        }
+        if (data.psychologicalDials && Array.isArray(data.psychologicalDials) && data.psychologicalDials.length > 0) {
+          setPsychologicalDials(data.psychologicalDials.slice(0, 5));
+        }
         // Apply same "anti-flap" behavior for red flags on full analysis payloads
         if (Array.isArray(data.redFlags)) {
           if (data.redFlags.length > 0) {
