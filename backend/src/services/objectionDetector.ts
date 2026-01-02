@@ -70,8 +70,6 @@ export class ObjectionDetector {
       '1': {
         title: '"I need to think about it"',
         dialTrigger: 'Validation Seeker + Status Conscious',
-        truthLevel: 78,
-        moneyStyle: 'Investment-minded, seeks premium solutions',
         stepsFactory: (name) => [
           {
             step: 1,
@@ -94,8 +92,6 @@ export class ObjectionDetector {
       '2': {
         title: '"It\'s too expensive"',
         dialTrigger: 'Status Conscious + Investment-minded',
-        truthLevel: 78,
-        moneyStyle: 'Has capital, questions ROI',
         stepsFactory: (name) => [
           {
             step: 1,
@@ -123,8 +119,6 @@ export class ObjectionDetector {
     return {
       title: scriptTemplate.title,
       dialTrigger: scriptTemplate.dialTrigger,
-      truthLevel: scriptTemplate.truthLevel,
-      moneyStyle: scriptTemplate.moneyStyle,
       steps: scriptTemplate.stepsFactory(customerName),
     };
   }

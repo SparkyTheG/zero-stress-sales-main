@@ -126,12 +126,6 @@ export default function WhisperEngine({
                     <p className="text-cyan-400">
                       <span className="text-white/60">Trigger:</span> {script.dialTrigger}
                     </p>
-                    <p className="text-cyan-400">
-                      <span className="text-white/60">Truth Level:</span> {script.truthLevel}%
-                    </p>
-                    <p className="text-cyan-400">
-                      <span className="text-white/60">Money Style:</span> {script.moneyStyle}
-                    </p>
                   </div>
                 </div>
               </div>

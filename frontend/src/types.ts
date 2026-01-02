@@ -175,8 +175,6 @@ export interface AnalysisResult {
   objectionScripts?: Record<string, {
     title: string;
     dialTrigger: string;
-    truthLevel: number;
-    moneyStyle: string;
     steps: ScriptStep[];
   }>;
 }

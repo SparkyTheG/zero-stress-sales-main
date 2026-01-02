@@ -52,8 +52,6 @@ export interface Objection {
 export interface ObjectionScript {
   title: string;
   dialTrigger: string;
-  truthLevel: number;
-  moneyStyle: string;
   steps: ScriptStep[];
 }
 

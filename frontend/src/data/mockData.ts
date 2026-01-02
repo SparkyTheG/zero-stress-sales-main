@@ -73,8 +73,6 @@ export const objectionScripts: Record<string, any> = {
   '1': {
     title: '"I need to think about it"',
     dialTrigger: 'Validation Seeker + Status Conscious',
-    truthLevel: 78,
-    moneyStyle: 'Investment-minded, seeks premium solutions',
     steps: [
       {
         step: 1,
@@ -117,8 +115,6 @@ export const objectionScripts: Record<string, any> = {
   '2': {
     title: '"It\'s too expensive"',
     dialTrigger: 'Status Conscious + Investment-minded',
-    truthLevel: 78,
-    moneyStyle: 'Has capital, questions ROI',
     steps: [
       {
         step: 1,
@@ -166,8 +162,6 @@ export const objectionScripts: Record<string, any> = {
   '3': {
     title: '"I need to talk to my therapist first"',
     dialTrigger: 'Validation Seeker + Control Oriented',
-    truthLevel: 78,
-    moneyStyle: 'Seeks external approval before big decisions',
     steps: [
       {
         step: 1,
@@ -216,8 +210,6 @@ export const objectionScripts: Record<string, any> = {
   '4': {
     title: '"What if it doesn\'t work for me?"',
     dialTrigger: 'Control Oriented + Analytical Thinker',
-    truthLevel: 78,
-    moneyStyle: 'Risk-averse despite high net worth',
     steps: [
       {
         step: 1,
@@ -265,8 +257,6 @@ export const objectionScripts: Record<string, any> = {
   '5': {
     title: '"Can I start next month instead?"',
     dialTrigger: 'Fear of Missing Out + Procrastination Pattern',
-    truthLevel: 78,
-    moneyStyle: 'Uses timing as delay tactic',
     steps: [
       {
         step: 1,

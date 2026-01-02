@@ -6,6 +6,7 @@ interface RedFlagsProps {
 }
 
 export default function RedFlags({ flags }: RedFlagsProps) {
+  const normalizeKey = (text: string) => text.toLowerCase().trim().replace(/\s+/g, ' ');
   const getSeverityColor = (severity: string) => {
     switch (severity) {
       case 'high':
@@ -44,9 +45,9 @@ export default function RedFlags({ flags }: RedFlagsProps) {
 
       {flags.length > 0 ? (
         <div className="space-y-3">
-          {flags.map((flag, index) => (
+          {flags.map((flag) => (
             <div
-              key={index}
+              key={`${flag.severity}:${normalizeKey(flag.text)}`}
               className={`p-4 rounded-xl border ${getSeverityColor(flag.severity)}`}
             >
               <div className="flex items-start gap-3">

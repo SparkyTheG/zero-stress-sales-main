@@ -180,8 +180,6 @@ COLOR GUIDELINES FOR PSYCHOLOGICAL DIALS (IMPORTANT - NO BLACK/GREY):
     "obj1": {
       "title": "\"Can I sleep on it?\"",
       "dialTrigger": "Commitment to Decide + Validation Seeker",
-      "truthLevel": 78,
-      "moneyStyle": "Investment-minded, seeks premium solutions",
       "steps": [
         { "step": 1, "text": "I totally get that... and thank you for being honest with me.", "pause": "1s", "note": "Acknowledge their concern" },
         { "step": 2, "text": "Based on what you shared earlier, this isn't really about needing time to think...", "pause": "1.5s", "note": "Reference specific conversation details" }
@@ -197,9 +195,7 @@ For EACH objection detected, generate a personalized handling script using the I
 
 1. Title: The objection text in quotes (e.g., "\"Can I sleep on it?\"")
 2. Dial Trigger: List the psychological dials/hot buttons that triggered this objection (e.g., "Commitment to Decide + Validation Seeker")
-3. Truth Level: Use the Truth Index score (estimate 70-85 if not calculated, or based on indicator coherence)
-4. Money Style: Based on money-related indicators (P4) - e.g., "Investment-minded", "Price-sensitive", "Resourceful", "Has capital, questions ROI"
-5. Steps: EXACTLY 2 conversation steps with:
+3. Steps: EXACTLY 2 conversation steps with:
    - step: Sequential number (1, 2)
    - text: What to say - PERSONALIZE based on actual conversation context
    - pause: Optional pause time (e.g., "1s", "2s", "1.5s") - use strategically
@@ -239,8 +235,6 @@ interface GPTIndicatorResult {
     [key: string]: {
       title: string;
       dialTrigger: string;
-      truthLevel: number;
-      moneyStyle: string;
       steps: Array<{
         step: number;
         text: string;
@@ -1090,9 +1084,7 @@ SCRIPT WRITING TECHNIQUES (use as inspiration, write YOUR OWN notes):
 For EACH DETECTED OBJECTION, create a script with:
 1. Title: The EXACT objection text in quotes (copy from input)
 2. Dial Trigger: Which psychological patterns triggered this
-3. Truth Level: 70-85 based on conversation
-4. Money Style: "Investment-minded", "Price-sensitive", etc.
-5. Steps: EXACTLY 2 conversation steps with:
+3. Steps: EXACTLY 2 conversation steps with:
    - step: Sequential number (1, 2)
    - text: What to say - PERSONALIZE based on conversation
    - pause: Optional ("1s", "2s")
@@ -1110,8 +1102,6 @@ RETURN JSON:
     "[objectionId]_1": {
       "title": "[EXACT objection text from input]",
       "dialTrigger": "...",
-      "truthLevel": 78,
-      "moneyStyle": "...",
       "steps": [...]
     }
   }
@@ -1234,9 +1224,7 @@ IMPORTANT: DO NOT copy technique names like "PEARL Prompt" or "David (Self-led I
 For EACH objection provided, create a script with:
 1. Title: The objection text in quotes
 2. Dial Trigger: Which psychological patterns triggered this (e.g., "Commitment to Decide + Validation Seeker")
-3. Truth Level: Estimate 70-85 based on conversation authenticity
-4. Money Style: Based on money-related indicators - "Investment-minded", "Price-sensitive", "Resourceful", etc.
-5. Steps: EXACTLY 2 conversation steps with step number, text (what to say), optional pause, optional note
+3. Steps: EXACTLY 2 conversation steps with step number, text (what to say), optional pause, optional note
 
 Script style:
 - Reference specific things the prospect said
@@ -1252,8 +1240,6 @@ Return ONLY a JSON object with objectionScripts field:
     "obj1": {
       "title": "\\"Objection text\\"",
       "dialTrigger": "Pattern names",
-      "truthLevel": 78,
-      "moneyStyle": "Style description",
       "steps": [
         { "step": 1, "text": "...", "pause": "1s", "note": "..." },
         ...
