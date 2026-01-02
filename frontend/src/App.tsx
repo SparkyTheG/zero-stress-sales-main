@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { User, Settings, Users, Star } from 'lucide-react';
 import WhisperEngine from './components/WhisperEngine';
 import Lubometer from './components/Lubometer';
@@ -32,6 +32,9 @@ function App() {
   const [objections, setObjections] = useState<Objection[]>([]);
   const [psychologicalDials, setPsychologicalDials] = useState<PsychologicalDial[]>([]);
   const [redFlags, setRedFlags] = useState<RedFlag[]>([]);
+  // Prevent "flapping" where one analysis finds flags and a later run returns [] and clears them.
+  // We only clear after 2 consecutive empty redFlags updates.
+  const redFlagsEmptyStreakRef = useRef(0);
   const [lubometerTiers, setLubometerTiers] = useState<LubometerTier[]>([]);
   const [truthIndexScore, setTruthIndexScore] = useState(0);
   const [aiObjectionScripts, setAiObjectionScripts] = useState<Record<string, any>>({});
@@ -76,8 +79,18 @@ function App() {
             setTruthIndexScore(data.truthIndex.score ?? 0);
           }
           
-          if (data.redFlags) {
-            setRedFlags(data.redFlags || []);
+          // Red flags: treat empty array as "maybe none", not an immediate clear (reduces flicker).
+          if (Object.prototype.hasOwnProperty.call(data, 'redFlags') && Array.isArray(data.redFlags)) {
+            const incoming: RedFlag[] = data.redFlags;
+            if (incoming.length > 0) {
+              redFlagsEmptyStreakRef.current = 0;
+              setRedFlags(incoming);
+            } else {
+              redFlagsEmptyStreakRef.current += 1;
+              if (redFlagsEmptyStreakRef.current >= 2) {
+                setRedFlags([]);
+              }
+            }
           }
         }
       });
@@ -89,7 +102,20 @@ function App() {
         // Fallback: Update all at once if full analysis received
         setObjections(data.objections || []);
         setPsychologicalDials(data.psychologicalDials || []);
-        setRedFlags(data.redFlags || []);
+        // Apply same "anti-flap" behavior for red flags on full analysis payloads
+        if (Array.isArray(data.redFlags)) {
+          if (data.redFlags.length > 0) {
+            redFlagsEmptyStreakRef.current = 0;
+            setRedFlags(data.redFlags);
+          } else {
+            redFlagsEmptyStreakRef.current += 1;
+            if (redFlagsEmptyStreakRef.current >= 2) {
+              setRedFlags([]);
+            }
+          }
+        } else {
+          // If backend omits redFlags, don't clear existing UI
+        }
         setLubometerTiers(data.lubometer?.priceTiers || []);
         setTruthIndexScore(data.truthIndex?.score ?? 0);
         // MERGE scripts with existing (don't replace)
@@ -128,14 +154,6 @@ function App() {
     if (wsClientRef && text.trim()) {
       console.log(`Transcript (${isFinal ? 'final' : 'interim'}):`, text);
       wsClientRef.sendTranscript(text, 'prospect', isFinal);
-      
-      // Request analysis when we get final text (analysis also triggered by backend after 5s)
-      if (isFinal) {
-        // Small delay to allow backend to receive transcript first
-        setTimeout(() => {
-          wsClientRef?.sendAnalyzeRequest();
-        }, 500);
-      }
     }
   }, [wsClientRef]);
 
