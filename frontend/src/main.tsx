@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import { SettingsProvider } from './contexts/SettingsContext.tsx';
+import { AuthProvider } from './contexts/AuthContext.tsx';
 import './index.css';
 
 const rootElement = document.getElementById('root');
@@ -12,8 +13,10 @@ if (!rootElement) {
 const root = createRoot(rootElement);
 root.render(
   <StrictMode>
-    <SettingsProvider>
-      <App />
-    </SettingsProvider>
+    <AuthProvider>
+      <SettingsProvider>
+        <App />
+      </SettingsProvider>
+    </AuthProvider>
   </StrictMode>
 );

@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { ArrowLeft, Settings, DollarSign, Scale, MessageSquare, RotateCcw } from 'lucide-react';
 import { useSettings } from '../contexts/SettingsContext';
+import { useAuth } from '../contexts/AuthContext';
 
 // Separate component for price tier input with local state for smooth editing
 function PriceTierInput({ 
@@ -73,9 +74,45 @@ interface AdminPanelProps {
 
 export default function AdminPanel({ onBack }: AdminPanelProps) {
   const { settings, updatePillarWeight, updatePriceTier, updateCustomPrompt, resetToDefaults } = useSettings();
+  const { user, loading, signInWithPassword, signUpWithPassword, signOut } = useAuth();
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authBusy, setAuthBusy] = useState(false);
 
   const calculateMaxScore = () => {
     return settings.pillarWeights.reduce((sum, p) => sum + p.weight * 10, 0);
+  };
+
+  const authStatusLabel = useMemo(() => {
+    if (loading) return 'Checking session...';
+    if (user?.email) return `Signed in as ${user.email}`;
+    return 'Not signed in';
+  }, [loading, user?.email]);
+
+  const handleAuth = async () => {
+    setAuthError(null);
+    setAuthBusy(true);
+    try {
+      const emailTrimmed = email.trim();
+      if (!emailTrimmed) {
+        setAuthError('Email is required.');
+        return;
+      }
+      if (!password) {
+        setAuthError('Password is required.');
+        return;
+      }
+      const result = authMode === 'signin'
+        ? await signInWithPassword(emailTrimmed, password)
+        : await signUpWithPassword(emailTrimmed, password);
+      if (result.error) setAuthError(result.error);
+      if (!result.error) setPassword('');
+    } finally {
+      setAuthBusy(false);
+    }
   };
 
   return (
@@ -97,18 +134,105 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
                 <h1 className="text-2xl font-bold text-white">Admin Panel</h1>
               </div>
             </div>
-            <button
-              onClick={resetToDefaults}
-              className="flex items-center gap-2 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-lg transition-all"
-            >
-              <RotateCcw className="w-4 h-4 text-red-400" />
-              <span className="text-red-400 text-sm font-medium">Reset to Defaults</span>
-            </button>
+            <div className="flex items-center gap-3">
+              <div className="text-sm text-gray-300">
+                <span className="text-gray-400">Auth:</span> {authStatusLabel}
+              </div>
+              {user ? (
+                <button
+                  onClick={() => signOut()}
+                  className="px-4 py-2 bg-gray-800/60 hover:bg-gray-700 border border-gray-700/50 rounded-lg transition-all text-gray-200 text-sm font-medium"
+                >
+                  Sign out
+                </button>
+              ) : null}
+              <button
+                onClick={resetToDefaults}
+                className="flex items-center gap-2 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-lg transition-all"
+              >
+                <RotateCcw className="w-4 h-4 text-red-400" />
+                <span className="text-red-400 text-sm font-medium">Reset to Defaults</span>
+              </button>
+            </div>
           </div>
         </div>
       </nav>
 
       <div className="max-w-[1400px] mx-auto px-8 py-8">
+        {!user && (
+          <div className="mb-8 backdrop-blur-xl bg-gray-900/40 border border-gray-700/50 rounded-2xl p-6">
+            <h2 className="text-xl font-bold text-white mb-2">Sign in to save settings</h2>
+            <p className="text-sm text-gray-400 mb-4">
+              When you sign in, your Admin Panel settings will be saved to Supabase and automatically loaded next time.
+            </p>
+
+            <div className="flex items-center gap-3 mb-4">
+              <button
+                onClick={() => setAuthMode('signin')}
+                className={`px-4 py-2 rounded-lg border transition-all text-sm font-medium ${
+                  authMode === 'signin'
+                    ? 'bg-cyan-600/30 border-cyan-500/60 text-white'
+                    : 'bg-gray-800/40 border-gray-700/50 text-gray-300 hover:bg-gray-800/60'
+                }`}
+              >
+                Sign in
+              </button>
+              <button
+                onClick={() => setAuthMode('signup')}
+                className={`px-4 py-2 rounded-lg border transition-all text-sm font-medium ${
+                  authMode === 'signup'
+                    ? 'bg-purple-600/30 border-purple-500/60 text-white'
+                    : 'bg-gray-800/40 border-gray-700/50 text-gray-300 hover:bg-gray-800/60'
+                }`}
+              >
+                Create account
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Email</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white focus:border-cyan-500 focus:outline-none"
+                  placeholder="you@company.com"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Password</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white focus:border-cyan-500 focus:outline-none"
+                  placeholder="••••••••"
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleAuth}
+                  disabled={authBusy || loading}
+                  className="w-full px-4 py-2 bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500 disabled:opacity-60 disabled:cursor-not-allowed border border-cyan-500/40 rounded-lg transition-all text-white text-sm font-semibold"
+                >
+                  {authMode === 'signin' ? 'Sign in' : 'Sign up'}
+                </button>
+              </div>
+            </div>
+
+            {authError && (
+              <div className="mt-4 text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                {authError}
+              </div>
+            )}
+
+            <div className="mt-3 text-xs text-gray-500">
+              Note: You must set `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` in your frontend env for auth to work.
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Pillar Weights Section */}
           <div className="backdrop-blur-xl bg-gray-900/40 border border-gray-700/50 rounded-2xl p-6">
