@@ -651,6 +651,28 @@ Return empty array if NO objections found: {"objections": []}`
         ...obj,
         id: `obj${index + 1}` // Ensure consistent IDs: obj1, obj2, obj3, obj4, obj5
       }));
+
+      // Step 5: Normalize probabilities; if GPT returns all-zero/invalid probabilities, apply deterministic fallback
+      const clampProb = (v: any) => {
+        const n = typeof v === 'number' ? v : Number(v);
+        if (!Number.isFinite(n)) return 0;
+        return Math.max(0, Math.min(100, Math.round(n)));
+      };
+
+      objections = objections.map((obj: any) => ({
+        ...obj,
+        probability: clampProb(obj.probability),
+      }));
+
+      const hasAnyNonZeroProb = objections.some((o: any) => (o.probability || 0) > 0);
+      if (!hasAnyNonZeroProb && objections.length > 0) {
+        // Provide a stable, meaningful distribution so UI progress bars aren't all 0%
+        const fallback = [80, 70, 60, 50, 40];
+        objections = objections.map((obj: any, i: number) => ({
+          ...obj,
+          probability: fallback[i] ?? 30,
+        }));
+      }
       
       console.log(`[MODEL 2] Final ${objections.length} unique objections:`, objections.map((o: any) => o.text));
       return objections;
