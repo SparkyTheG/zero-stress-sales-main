@@ -1,5 +1,5 @@
-import { useMemo, useState, useEffect } from 'react';
-import { ArrowLeft, Settings, DollarSign, Scale, MessageSquare, RotateCcw, Save, Check, AlertCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ArrowLeft, Settings, DollarSign, Scale, MessageSquare, RotateCcw, Save, Check, AlertCircle, Mail, Lock, UserPlus, LogIn } from 'lucide-react';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -68,19 +68,282 @@ function PriceTierInput({
   );
 }
 
+// Full-page login/signup screen
+function AuthScreen({ 
+  onBack, 
+  onAuthSuccess 
+}: { 
+  onBack: () => void;
+  onAuthSuccess: () => void;
+}) {
+  const { signInWithPassword, signUpWithPassword, loading } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authBusy, setAuthBusy] = useState(false);
+  const [signupSuccess, setSignupSuccess] = useState(false);
+
+  const handleAuth = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    setAuthError(null);
+    setAuthBusy(true);
+    try {
+      const emailTrimmed = email.trim();
+      if (!emailTrimmed) {
+        setAuthError('Email is required.');
+        return;
+      }
+      if (!password) {
+        setAuthError('Password is required.');
+        return;
+      }
+      if (password.length < 6) {
+        setAuthError('Password must be at least 6 characters.');
+        return;
+      }
+
+      if (authMode === 'signin') {
+        const result = await signInWithPassword(emailTrimmed, password);
+        if (result.error) {
+          setAuthError(result.error);
+        } else {
+          onAuthSuccess();
+        }
+      } else {
+        const result = await signUpWithPassword(emailTrimmed, password);
+        if (result.error) {
+          setAuthError(result.error);
+        } else {
+          // Signup success - show verification message
+          setSignupSuccess(true);
+        }
+      }
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  // Show verification message after signup
+  if (signupSuccess) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-gray-800 flex items-center justify-center p-8">
+        <div className="max-w-md w-full">
+          <div className="backdrop-blur-xl bg-gray-900/60 border border-gray-700/50 rounded-2xl p-8 text-center">
+            <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Mail className="w-8 h-8 text-white" />
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-3">Check your email!</h2>
+            <p className="text-gray-300 mb-6">
+              We've sent a verification link to <span className="text-cyan-400 font-medium">{email}</span>. 
+              Please click the link in your email to verify your account before signing in.
+            </p>
+            <div className="space-y-3">
+              <button
+                onClick={() => {
+                  setSignupSuccess(false);
+                  setAuthMode('signin');
+                  setPassword('');
+                }}
+                className="w-full px-4 py-3 bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500 border border-cyan-500/40 rounded-xl transition-all text-white font-semibold"
+              >
+                Back to Sign In
+              </button>
+              <button
+                onClick={onBack}
+                className="w-full px-4 py-3 bg-gray-800/60 hover:bg-gray-700 border border-gray-700/50 rounded-xl transition-all text-gray-300 font-medium"
+              >
+                Back to Dashboard
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-gray-800 flex items-center justify-center p-8">
+      <div className="max-w-md w-full">
+        {/* Back button */}
+        <button
+          onClick={onBack}
+          className="flex items-center gap-2 px-4 py-2 mb-6 bg-gray-800/60 hover:bg-gray-700 border border-gray-700/50 rounded-lg transition-all"
+        >
+          <ArrowLeft className="w-4 h-4 text-cyan-400" />
+          <span className="text-gray-300 text-sm font-medium">Back to Dashboard</span>
+        </button>
+
+        <div className="backdrop-blur-xl bg-gray-900/60 border border-gray-700/50 rounded-2xl p-8">
+          {/* Header */}
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 bg-gradient-to-br from-cyan-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Settings className="w-8 h-8 text-white" />
+            </div>
+            <h1 className="text-2xl font-bold text-white mb-2">Admin Panel</h1>
+            <p className="text-gray-400 text-sm">
+              {authMode === 'signin' 
+                ? 'Sign in to access your settings' 
+                : 'Create an account to save your settings'}
+            </p>
+          </div>
+
+          {/* Auth mode toggle */}
+          <div className="flex gap-2 mb-6">
+            <button
+              onClick={() => setAuthMode('signin')}
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl border transition-all text-sm font-medium ${
+                authMode === 'signin'
+                  ? 'bg-cyan-600/30 border-cyan-500/60 text-white'
+                  : 'bg-gray-800/40 border-gray-700/50 text-gray-400 hover:bg-gray-800/60 hover:text-gray-300'
+              }`}
+            >
+              <LogIn className="w-4 h-4" />
+              Sign In
+            </button>
+            <button
+              onClick={() => setAuthMode('signup')}
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl border transition-all text-sm font-medium ${
+                authMode === 'signup'
+                  ? 'bg-purple-600/30 border-purple-500/60 text-white'
+                  : 'bg-gray-800/40 border-gray-700/50 text-gray-400 hover:bg-gray-800/60 hover:text-gray-300'
+              }`}
+            >
+              <UserPlus className="w-4 h-4" />
+              Create Account
+            </button>
+          </div>
+
+          {/* Form */}
+          <form onSubmit={handleAuth} className="space-y-4">
+            <div>
+              <label className="block text-sm text-gray-400 mb-2">Email</label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full pl-11 pr-4 py-3 bg-gray-900 border border-gray-600 rounded-xl text-white focus:border-cyan-500 focus:outline-none"
+                  placeholder="you@company.com"
+                  autoComplete="email"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm text-gray-400 mb-2">Password</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full pl-11 pr-4 py-3 bg-gray-900 border border-gray-600 rounded-xl text-white focus:border-cyan-500 focus:outline-none"
+                  placeholder="••••••••"
+                  autoComplete={authMode === 'signin' ? 'current-password' : 'new-password'}
+                />
+              </div>
+              {authMode === 'signup' && (
+                <p className="text-xs text-gray-500 mt-1">Must be at least 6 characters</p>
+              )}
+            </div>
+
+            {authError && (
+              <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-300 text-sm">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                {authError}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={authBusy || loading}
+              className="w-full px-4 py-3 bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500 disabled:opacity-60 disabled:cursor-not-allowed border border-cyan-500/40 rounded-xl transition-all text-white font-semibold flex items-center justify-center gap-2"
+            >
+              {authBusy ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  {authMode === 'signin' ? 'Signing in...' : 'Creating account...'}
+                </>
+              ) : (
+                <>
+                  {authMode === 'signin' ? <LogIn className="w-5 h-5" /> : <UserPlus className="w-5 h-5" />}
+                  {authMode === 'signin' ? 'Sign In' : 'Create Account'}
+                </>
+              )}
+            </button>
+          </form>
+
+          {authMode === 'signup' && (
+            <p className="text-xs text-gray-500 text-center mt-4">
+              By creating an account, you'll receive an email to verify your address before accessing the Admin Panel.
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Email verification pending screen
+function VerificationPendingScreen({ 
+  email, 
+  onBack,
+  onSignOut
+}: { 
+  email: string;
+  onBack: () => void;
+  onSignOut: () => void;
+}) {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-gray-800 flex items-center justify-center p-8">
+      <div className="max-w-md w-full">
+        <div className="backdrop-blur-xl bg-gray-900/60 border border-amber-500/30 rounded-2xl p-8 text-center">
+          <div className="w-16 h-16 bg-gradient-to-br from-amber-500 to-orange-500 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Mail className="w-8 h-8 text-white" />
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-3">Email Verification Required</h2>
+          <p className="text-gray-300 mb-2">
+            Your email <span className="text-amber-400 font-medium">{email}</span> hasn't been verified yet.
+          </p>
+          <p className="text-gray-400 text-sm mb-6">
+            Please check your inbox and click the verification link we sent you. After verifying, refresh this page.
+          </p>
+          <div className="space-y-3">
+            <button
+              onClick={() => window.location.reload()}
+              className="w-full px-4 py-3 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 border border-amber-500/40 rounded-xl transition-all text-white font-semibold"
+            >
+              I've Verified - Refresh
+            </button>
+            <button
+              onClick={onSignOut}
+              className="w-full px-4 py-3 bg-gray-800/60 hover:bg-gray-700 border border-gray-700/50 rounded-xl transition-all text-gray-300 font-medium"
+            >
+              Sign Out
+            </button>
+            <button
+              onClick={onBack}
+              className="w-full px-4 py-3 text-gray-400 hover:text-gray-300 transition-all text-sm"
+            >
+              Back to Dashboard
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface AdminPanelProps {
   onBack: () => void;
 }
 
 export default function AdminPanel({ onBack }: AdminPanelProps) {
   const { settings, updatePillarWeight, updatePriceTier, updateCustomPrompt, resetToDefaults, saveToSupabase, saving, lastSaved } = useSettings();
-  const { user, loading, signInWithPassword, signUpWithPassword, signOut } = useAuth();
+  const { user, loading, signOut } = useAuth();
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
-  const [authError, setAuthError] = useState<string | null>(null);
-  const [authBusy, setAuthBusy] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -100,35 +363,36 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
     return settings.pillarWeights.reduce((sum, p) => sum + p.weight * 10, 0);
   };
 
-  const authStatusLabel = useMemo(() => {
-    if (loading) return 'Checking session...';
-    if (user?.email) return `Signed in as ${user.email}`;
-    return 'Not signed in';
-  }, [loading, user?.email]);
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-gray-800 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
-  const handleAuth = async () => {
-    setAuthError(null);
-    setAuthBusy(true);
-    try {
-      const emailTrimmed = email.trim();
-      if (!emailTrimmed) {
-        setAuthError('Email is required.');
-        return;
-      }
-      if (!password) {
-        setAuthError('Password is required.');
-        return;
-      }
-      const result = authMode === 'signin'
-        ? await signInWithPassword(emailTrimmed, password)
-        : await signUpWithPassword(emailTrimmed, password);
-      if (result.error) setAuthError(result.error);
-      if (!result.error) setPassword('');
-    } finally {
-      setAuthBusy(false);
-    }
-  };
+  // Not logged in - show auth screen
+  if (!user) {
+    return <AuthScreen onBack={onBack} onAuthSuccess={() => {}} />;
+  }
 
+  // Logged in but email not verified - show verification pending
+  const isEmailVerified = user.email_confirmed_at || user.confirmed_at;
+  if (!isEmailVerified) {
+    return (
+      <VerificationPendingScreen 
+        email={user.email || ''} 
+        onBack={onBack}
+        onSignOut={signOut}
+      />
+    );
+  }
+
+  // Logged in and verified - show admin panel
   return (
     <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-gray-800">
       {/* Header */}
@@ -150,38 +414,34 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
             </div>
             <div className="flex items-center gap-3">
               <div className="text-sm text-gray-300">
-                <span className="text-gray-400">Auth:</span> {authStatusLabel}
+                <span className="text-gray-400">Signed in as</span> {user.email}
               </div>
-              {user ? (
-                <>
-                  <button
-                    onClick={handleSave}
-                    disabled={saving}
-                    className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition-all ${
-                      saveSuccess
-                        ? 'bg-emerald-500/30 border-emerald-500/60 text-emerald-300'
-                        : 'bg-gradient-to-r from-emerald-600/60 to-cyan-600/60 hover:from-emerald-600 hover:to-cyan-600 border-emerald-500/50 text-white'
-                    } disabled:opacity-60 disabled:cursor-not-allowed`}
-                  >
-                    {saving ? (
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    ) : saveSuccess ? (
-                      <Check className="w-4 h-4" />
-                    ) : (
-                      <Save className="w-4 h-4" />
-                    )}
-                    <span className="text-sm font-medium">
-                      {saving ? 'Saving...' : saveSuccess ? 'Saved!' : 'Save Settings'}
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => signOut()}
-                    className="px-4 py-2 bg-gray-800/60 hover:bg-gray-700 border border-gray-700/50 rounded-lg transition-all text-gray-200 text-sm font-medium"
-                  >
-                    Sign out
-                  </button>
-                </>
-              ) : null}
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition-all ${
+                  saveSuccess
+                    ? 'bg-emerald-500/30 border-emerald-500/60 text-emerald-300'
+                    : 'bg-gradient-to-r from-emerald-600/60 to-cyan-600/60 hover:from-emerald-600 hover:to-cyan-600 border-emerald-500/50 text-white'
+                } disabled:opacity-60 disabled:cursor-not-allowed`}
+              >
+                {saving ? (
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : saveSuccess ? (
+                  <Check className="w-4 h-4" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                <span className="text-sm font-medium">
+                  {saving ? 'Saving...' : saveSuccess ? 'Saved!' : 'Save Settings'}
+                </span>
+              </button>
+              <button
+                onClick={() => signOut()}
+                className="px-4 py-2 bg-gray-800/60 hover:bg-gray-700 border border-gray-700/50 rounded-lg transition-all text-gray-200 text-sm font-medium"
+              >
+                Sign out
+              </button>
               <button
                 onClick={resetToDefaults}
                 className="flex items-center gap-2 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-lg transition-all"
@@ -195,75 +455,6 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
       </nav>
 
       <div className="max-w-[1400px] mx-auto px-8 py-8">
-        {!user && (
-          <div className="mb-8 backdrop-blur-xl bg-gray-900/40 border border-gray-700/50 rounded-2xl p-6">
-            <h2 className="text-xl font-bold text-white mb-2">Sign in to save settings</h2>
-            <p className="text-sm text-gray-400 mb-4">
-              When you sign in, your Admin Panel settings will be saved to Supabase and automatically loaded next time.
-            </p>
-
-            <div className="flex items-center gap-3 mb-4">
-              <button
-                onClick={() => setAuthMode('signin')}
-                className={`px-4 py-2 rounded-lg border transition-all text-sm font-medium ${
-                  authMode === 'signin'
-                    ? 'bg-cyan-600/30 border-cyan-500/60 text-white'
-                    : 'bg-gray-800/40 border-gray-700/50 text-gray-300 hover:bg-gray-800/60'
-                }`}
-              >
-                Sign in
-              </button>
-              <button
-                onClick={() => setAuthMode('signup')}
-                className={`px-4 py-2 rounded-lg border transition-all text-sm font-medium ${
-                  authMode === 'signup'
-                    ? 'bg-purple-600/30 border-purple-500/60 text-white'
-                    : 'bg-gray-800/40 border-gray-700/50 text-gray-300 hover:bg-gray-800/60'
-                }`}
-              >
-                Create account
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">Email</label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white focus:border-cyan-500 focus:outline-none"
-                  placeholder="you@company.com"
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">Password</label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white focus:border-cyan-500 focus:outline-none"
-                  placeholder="••••••••"
-                />
-              </div>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={handleAuth}
-                  disabled={authBusy || loading}
-                  className="w-full px-4 py-2 bg-gradient-to-r from-cyan-600 to-purple-600 hover:from-cyan-500 hover:to-purple-500 disabled:opacity-60 disabled:cursor-not-allowed border border-cyan-500/40 rounded-lg transition-all text-white text-sm font-semibold"
-                >
-                  {authMode === 'signin' ? 'Sign in' : 'Sign up'}
-                </button>
-              </div>
-            </div>
-
-            {authError && (
-              <div className="mt-4 text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg p-3">
-                {authError}
-              </div>
-            )}
-          </div>
-        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Pillar Weights Section */}
