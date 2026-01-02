@@ -1187,7 +1187,6 @@ For EACH DETECTED OBJECTION, create a script with:
    - step: Sequential number (1, 2)
    - text: What to say - PERSONALIZE based on conversation
    - pause: Optional ("1s", "2s")
-   - note: Coaching note in natural language
 
 Script requirements:
 - Title MUST match the exact objection text passed to you
@@ -1221,7 +1220,7 @@ CRITICAL:
           }
         ],
         temperature: 0.3,
-        max_tokens: 2500,
+        max_tokens: 2000,
         response_format: { type: 'json_object' }
       });
 
