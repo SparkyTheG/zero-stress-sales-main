@@ -49,6 +49,44 @@ function App() {
   const [isRecording, setIsRecording] = useState(false);
   const [wsClientRef, setWsClientRef] = useState<ReturnType<typeof getWebSocketClient> | null>(null);
 
+  // Merge helper: keep up to 5 items, prefer newer incoming items, drop oldest when over limit.
+  const mergeLimited = useCallback(<T, K extends keyof T>(prev: T[], incoming: T[], key: K, limit = 5): T[] => {
+    if (!Array.isArray(incoming) || incoming.length === 0) return prev;
+
+    const seen = new Set<string>();
+    const result: T[] = [];
+
+    // Start with existing items in order
+    for (const item of prev) {
+      const id = String(item[key] ?? '');
+      if (!seen.has(id) && id.length > 0) {
+        seen.add(id);
+        result.push(item);
+      }
+    }
+
+    // Append/replace with incoming items (newest at the end)
+    for (const item of incoming) {
+      const id = String(item[key] ?? '');
+      if (id.length === 0) continue;
+      if (seen.has(id)) {
+        // Replace existing item with updated data
+        const idx = result.findIndex(r => String((r as any)[key]) === id);
+        if (idx >= 0) result[idx] = item;
+      } else {
+        seen.add(id);
+        result.push(item);
+      }
+    }
+
+    // Trim to limit, dropping the oldest (front)
+    while (result.length > limit) {
+      result.shift();
+    }
+
+    return result;
+  }, []);
+
   useEffect(() => {
     try {
       const wsClient = getWebSocketClient(); // URL determined automatically
@@ -72,11 +110,11 @@ function App() {
         } else if (type === 'partial') {
           // Progressive partial updates - update state incrementally
           if (data.psychologicalDials) {
-            setPsychologicalDials(data.psychologicalDials || []);
+            setPsychologicalDials(prev => mergeLimited(prev, data.psychologicalDials || [], 'name'));
           }
           
           if (data.objections) {
-            setObjections(data.objections || []);
+            setObjections(prev => mergeLimited(prev, data.objections || [], 'id'));
           }
           
           if (data.lubometer) {
@@ -108,8 +146,8 @@ function App() {
         console.log('Full analysis received (fallback):', data);
         
         // Fallback: Update all at once if full analysis received
-        setObjections(data.objections || []);
-        setPsychologicalDials(data.psychologicalDials || []);
+        setObjections(prev => mergeLimited(prev, data.objections || [], 'id'));
+        setPsychologicalDials(prev => mergeLimited(prev, data.psychologicalDials || [], 'name'));
         // Apply same "anti-flap" behavior for red flags on full analysis payloads
         if (Array.isArray(data.redFlags)) {
           if (data.redFlags.length > 0) {
