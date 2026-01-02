@@ -685,83 +685,316 @@ Return empty array if NO objections found: {"objections": []}`
   }
 
   // ============================================================
-  // MODEL 4: LUBOMETER (Buying Readiness)
-  // ONLY analyzes indicators needed for Lubometer calculation
-  // Self-contained: scores its own indicators, then calculates
+  // PILLAR SCORERS: 7 parallel AI models for fast indicator scoring
+  // Each model focuses on ONE pillar for faster, more accurate scoring
   // ============================================================
-  private async analyzeModel4_Lubometer(transcript: string): Promise<any> {
+  
+  private async scorePillar1(transcript: string): Promise<any[]> {
     try {
-      // Step 1: Score ONLY the indicators needed for Lubometer (all 27, but focused prompt)
       const response = await this.openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
-            content: `You are a buying readiness analyzer. Score indicators to calculate LUBOMETER (buying readiness).
+            content: `Score PILLAR 1: Perceived Spread (Pain & Desire Gap) - weight 1.5x
 
-SCORE THESE 27 INDICATORS (1-10 scale):
-PILLAR 1 - Pain/Desire (weight 1.5x):
-1. Pain Awareness - How aware of their problem?
-2. Desire Clarity - How clear on what they want?
-3. Desire Priority - How important is this?
-4. Duration - How long have they had this problem?
-
-PILLAR 2 - Urgency:
-5. Time Pressure - External deadline?
-6. Cost of Delay - What's at stake if they wait?
-7. Internal Timing - Internal urgency?
-8. Environmental Availability - Can they engage now?
-
-PILLAR 3 - Decisiveness:
-9. Decision Authority - Are they the decision maker?
-10. Decision Style - How do they decide?
-11. Commitment - Ready to commit?
-12. Self-Permission - Give themselves permission?
-
-PILLAR 4 - Money (weight 1.5x):
-13. Resource Access - Have funds?
-14. Resource Fluidity - Can move money?
-15. Investment Mindset - See value in investing?
-16. Resourcefulness - Would find a way?
-
-PILLAR 5 - Ownership:
-17. Problem Recognition - Own the problem?
-18. Solution Ownership - Own the solution?
-19. Locus of Control - Control outcomes?
-20. Integrity - Follow through?
-
-PILLAR 6 - Price Sensitivity (REVERSED in calc):
-21. Emotional Spending - How feel about spending?
-22. Negotiation Reflex - Try to negotiate?
-23. Structural Rigidity - Need flexible terms?
-
-PILLAR 7 - Trust:
-24. External Trust - Trust you/offer?
-25. Internal Trust - Trust themselves?
-26. Risk Tolerance - Comfortable with risk?
-27. ROI Ownership - Own the ROI?
+SCORE THESE 4 INDICATORS (1-10 scale):
+1. Pain Awareness - How aware is the prospect of their pain/problem?
+2. Desire Clarity - How clear is their vision of what they want?
+3. Desire Priority - How important is solving this to them?
+4. Duration of Dissatisfaction - How long have they lived with this problem?
 
 SCORING: 1-3=Low/Negative, 4-6=Neutral, 7-10=Strong/Positive
 
-RETURN JSON:
-{"indicators": [{"id": 1, "name": "Pain Awareness", "score": 7, "pillarId": "P1"}...]}`
+RETURN JSON ONLY:
+{"indicators":[{"id":1,"name":"Pain Awareness","score":7,"pillarId":"P1"},{"id":2,"name":"Desire Clarity","score":6,"pillarId":"P1"},{"id":3,"name":"Desire Priority","score":8,"pillarId":"P1"},{"id":4,"name":"Duration of Dissatisfaction","score":5,"pillarId":"P1"}]}`
           },
-          {
-            role: 'user',
-            content: transcript
-          }
+          { role: 'user', content: transcript }
         ],
         temperature: 0.2,
-        max_tokens: 1200,
+        max_tokens: 200,
         response_format: { type: 'json_object' }
       });
+      const result = JSON.parse(response.choices[0]?.message?.content || '{}');
+      console.log(`[PILLAR 1] ✓ Scored ${(result.indicators || []).length} indicators`);
+      return result.indicators || [];
+    } catch (e) {
+      console.error('[PILLAR 1] Error:', e);
+      return [
+        { id: 1, name: 'Pain Awareness', score: 5, pillarId: 'P1' },
+        { id: 2, name: 'Desire Clarity', score: 5, pillarId: 'P1' },
+        { id: 3, name: 'Desire Priority', score: 5, pillarId: 'P1' },
+        { id: 4, name: 'Duration of Dissatisfaction', score: 5, pillarId: 'P1' },
+      ];
+    }
+  }
 
-      const content = response.choices[0]?.message?.content;
-      if (!content) throw new Error('No response from GPT');
+  private async scorePillar2(transcript: string): Promise<any[]> {
+    try {
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: `Score PILLAR 2: Urgency
+
+SCORE THESE 4 INDICATORS (1-10 scale):
+5. Time Pressure - Is there external timing/deadline driving this?
+6. Perceived Cost of Delay - What's at stake if they wait?
+7. Internal Timing Activation - Is something internal driving the timing?
+8. Environmental Availability - Can they engage now?
+
+SCORING: 1-3=Low/Negative, 4-6=Neutral, 7-10=Strong/Positive
+
+RETURN JSON ONLY:
+{"indicators":[{"id":5,"name":"Time Pressure","score":6,"pillarId":"P2"},{"id":6,"name":"Perceived Cost of Delay","score":7,"pillarId":"P2"},{"id":7,"name":"Internal Timing Activation","score":5,"pillarId":"P2"},{"id":8,"name":"Environmental Availability","score":8,"pillarId":"P2"}]}`
+          },
+          { role: 'user', content: transcript }
+        ],
+        temperature: 0.2,
+        max_tokens: 200,
+        response_format: { type: 'json_object' }
+      });
+      const result = JSON.parse(response.choices[0]?.message?.content || '{}');
+      console.log(`[PILLAR 2] ✓ Scored ${(result.indicators || []).length} indicators`);
+      return result.indicators || [];
+    } catch (e) {
+      console.error('[PILLAR 2] Error:', e);
+      return [
+        { id: 5, name: 'Time Pressure', score: 5, pillarId: 'P2' },
+        { id: 6, name: 'Perceived Cost of Delay', score: 5, pillarId: 'P2' },
+        { id: 7, name: 'Internal Timing Activation', score: 5, pillarId: 'P2' },
+        { id: 8, name: 'Environmental Availability', score: 5, pillarId: 'P2' },
+      ];
+    }
+  }
+
+  private async scorePillar3(transcript: string): Promise<any[]> {
+    try {
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: `Score PILLAR 3: Decisiveness
+
+SCORE THESE 4 INDICATORS (1-10 scale):
+9. Decision-Making Authority - Are they the decision maker?
+10. Decision-Making Style - How do they typically make decisions?
+11. Commitment to Decide - Are they ready to commit?
+12. Self-Permission to Choose - Do they give themselves permission to decide?
+
+SCORING: 1-3=Low/Negative, 4-6=Neutral, 7-10=Strong/Positive
+
+RETURN JSON ONLY:
+{"indicators":[{"id":9,"name":"Decision-Making Authority","score":7,"pillarId":"P3"},{"id":10,"name":"Decision-Making Style","score":6,"pillarId":"P3"},{"id":11,"name":"Commitment to Decide","score":5,"pillarId":"P3"},{"id":12,"name":"Self-Permission to Choose","score":6,"pillarId":"P3"}]}`
+          },
+          { role: 'user', content: transcript }
+        ],
+        temperature: 0.2,
+        max_tokens: 200,
+        response_format: { type: 'json_object' }
+      });
+      const result = JSON.parse(response.choices[0]?.message?.content || '{}');
+      console.log(`[PILLAR 3] ✓ Scored ${(result.indicators || []).length} indicators`);
+      return result.indicators || [];
+    } catch (e) {
+      console.error('[PILLAR 3] Error:', e);
+      return [
+        { id: 9, name: 'Decision-Making Authority', score: 5, pillarId: 'P3' },
+        { id: 10, name: 'Decision-Making Style', score: 5, pillarId: 'P3' },
+        { id: 11, name: 'Commitment to Decide', score: 5, pillarId: 'P3' },
+        { id: 12, name: 'Self-Permission to Choose', score: 5, pillarId: 'P3' },
+      ];
+    }
+  }
+
+  private async scorePillar4(transcript: string): Promise<any[]> {
+    try {
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: `Score PILLAR 4: Available Money - weight 1.5x
+
+SCORE THESE 4 INDICATORS (1-10 scale):
+13. Resource Access - Do they have funds available?
+14. Resource Fluidity - Can they move money around if needed?
+15. Investment Mindset - Do they see value in investing?
+16. Resourcefulness - Would they find a way if it mattered?
+
+SCORING: 1-3=Low/Negative, 4-6=Neutral, 7-10=Strong/Positive
+
+RETURN JSON ONLY:
+{"indicators":[{"id":13,"name":"Resource Access","score":6,"pillarId":"P4"},{"id":14,"name":"Resource Fluidity","score":5,"pillarId":"P4"},{"id":15,"name":"Investment Mindset","score":7,"pillarId":"P4"},{"id":16,"name":"Resourcefulness","score":6,"pillarId":"P4"}]}`
+          },
+          { role: 'user', content: transcript }
+        ],
+        temperature: 0.2,
+        max_tokens: 200,
+        response_format: { type: 'json_object' }
+      });
+      const result = JSON.parse(response.choices[0]?.message?.content || '{}');
+      console.log(`[PILLAR 4] ✓ Scored ${(result.indicators || []).length} indicators`);
+      return result.indicators || [];
+    } catch (e) {
+      console.error('[PILLAR 4] Error:', e);
+      return [
+        { id: 13, name: 'Resource Access', score: 5, pillarId: 'P4' },
+        { id: 14, name: 'Resource Fluidity', score: 5, pillarId: 'P4' },
+        { id: 15, name: 'Investment Mindset', score: 5, pillarId: 'P4' },
+        { id: 16, name: 'Resourcefulness', score: 5, pillarId: 'P4' },
+      ];
+    }
+  }
+
+  private async scorePillar5(transcript: string): Promise<any[]> {
+    try {
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: `Score PILLAR 5: Responsibility & Ownership
+
+SCORE THESE 4 INDICATORS (1-10 scale):
+17. Problem Recognition - Do they own the problem?
+18. Solution Ownership - Do they own the solution?
+19. Locus of Control - Do they believe they control outcomes?
+20. Integrity: Desire vs Action - Do they follow through on what they say?
+
+SCORING: 1-3=Low/Negative, 4-6=Neutral, 7-10=Strong/Positive
+
+RETURN JSON ONLY:
+{"indicators":[{"id":17,"name":"Problem Recognition","score":7,"pillarId":"P5"},{"id":18,"name":"Solution Ownership","score":6,"pillarId":"P5"},{"id":19,"name":"Locus of Control","score":5,"pillarId":"P5"},{"id":20,"name":"Integrity: Desire vs Action","score":6,"pillarId":"P5"}]}`
+          },
+          { role: 'user', content: transcript }
+        ],
+        temperature: 0.2,
+        max_tokens: 200,
+        response_format: { type: 'json_object' }
+      });
+      const result = JSON.parse(response.choices[0]?.message?.content || '{}');
+      console.log(`[PILLAR 5] ✓ Scored ${(result.indicators || []).length} indicators`);
+      return result.indicators || [];
+    } catch (e) {
+      console.error('[PILLAR 5] Error:', e);
+      return [
+        { id: 17, name: 'Problem Recognition', score: 5, pillarId: 'P5' },
+        { id: 18, name: 'Solution Ownership', score: 5, pillarId: 'P5' },
+        { id: 19, name: 'Locus of Control', score: 5, pillarId: 'P5' },
+        { id: 20, name: 'Integrity: Desire vs Action', score: 5, pillarId: 'P5' },
+      ];
+    }
+  }
+
+  private async scorePillar6(transcript: string): Promise<any[]> {
+    try {
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: `Score PILLAR 6: Price Sensitivity (NOTE: These scores will be REVERSED in calculation - higher raw score = more price sensitive = LESS ready to buy)
+
+SCORE THESE 3 INDICATORS (1-10 scale):
+21. Emotional Response to Spending - How do they emotionally respond to spending? (High = negative about spending)
+22. Negotiation Reflex - Do they try to negotiate/ask for discounts? (High = strong negotiation reflex)
+23. Structural Rigidity - Do they need very flexible payment terms? (High = very rigid about terms)
+
+SCORING: 1-3=Low price sensitivity, 4-6=Moderate, 7-10=High price sensitivity
+
+RETURN JSON ONLY:
+{"indicators":[{"id":21,"name":"Emotional Response to Spending","score":5,"pillarId":"P6"},{"id":22,"name":"Negotiation Reflex","score":4,"pillarId":"P6"},{"id":23,"name":"Structural Rigidity","score":3,"pillarId":"P6"}]}`
+          },
+          { role: 'user', content: transcript }
+        ],
+        temperature: 0.2,
+        max_tokens: 150,
+        response_format: { type: 'json_object' }
+      });
+      const result = JSON.parse(response.choices[0]?.message?.content || '{}');
+      console.log(`[PILLAR 6] ✓ Scored ${(result.indicators || []).length} indicators`);
+      return result.indicators || [];
+    } catch (e) {
+      console.error('[PILLAR 6] Error:', e);
+      return [
+        { id: 21, name: 'Emotional Response to Spending', score: 5, pillarId: 'P6' },
+        { id: 22, name: 'Negotiation Reflex', score: 5, pillarId: 'P6' },
+        { id: 23, name: 'Structural Rigidity', score: 5, pillarId: 'P6' },
+      ];
+    }
+  }
+
+  private async scorePillar7(transcript: string): Promise<any[]> {
+    try {
+      const response = await this.openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: `Score PILLAR 7: Trust
+
+SCORE THESE 4 INDICATORS (1-10 scale):
+24. External Trust - Do they trust you/the offer/the company?
+25. Internal Trust - Do they trust themselves to make good decisions?
+26. Risk Tolerance - Are they comfortable with uncertainty and risk?
+27. ROI Ownership Framing - Do they own the ROI/believe they can get results?
+
+SCORING: 1-3=Low/Negative, 4-6=Neutral, 7-10=Strong/Positive
+
+RETURN JSON ONLY:
+{"indicators":[{"id":24,"name":"External Trust","score":6,"pillarId":"P7"},{"id":25,"name":"Internal Trust","score":7,"pillarId":"P7"},{"id":26,"name":"Risk Tolerance","score":5,"pillarId":"P7"},{"id":27,"name":"ROI Ownership Framing","score":6,"pillarId":"P7"}]}`
+          },
+          { role: 'user', content: transcript }
+        ],
+        temperature: 0.2,
+        max_tokens: 200,
+        response_format: { type: 'json_object' }
+      });
+      const result = JSON.parse(response.choices[0]?.message?.content || '{}');
+      console.log(`[PILLAR 7] ✓ Scored ${(result.indicators || []).length} indicators`);
+      return result.indicators || [];
+    } catch (e) {
+      console.error('[PILLAR 7] Error:', e);
+      return [
+        { id: 24, name: 'External Trust', score: 5, pillarId: 'P7' },
+        { id: 25, name: 'Internal Trust', score: 5, pillarId: 'P7' },
+        { id: 26, name: 'Risk Tolerance', score: 5, pillarId: 'P7' },
+        { id: 27, name: 'ROI Ownership Framing', score: 5, pillarId: 'P7' },
+      ];
+    }
+  }
+
+  // ============================================================
+  // MODEL 4: LUBOMETER (Buying Readiness)
+  // Uses 7 PARALLEL AI models - one per pillar for faster scoring
+  // Self-contained: scores its own indicators, then calculates
+  // ============================================================
+  private async analyzeModel4_Lubometer(transcript: string): Promise<any> {
+    try {
+      const startTime = Date.now();
       
-      const result = JSON.parse(content);
-      const indicators = this.validateIndicators(result.indicators || []);
-      console.log(`[MODEL 4] Validated ${indicators.length} indicators`);
+      // Step 1: Score indicators using 7 PARALLEL AI models (one per pillar)
+      console.log(`[MODEL 4] Starting 7 parallel pillar scorers...`);
+      
+      const [p1, p2, p3, p4, p5, p6, p7] = await Promise.all([
+        this.scorePillar1(transcript),
+        this.scorePillar2(transcript),
+        this.scorePillar3(transcript),
+        this.scorePillar4(transcript),
+        this.scorePillar5(transcript),
+        this.scorePillar6(transcript),
+        this.scorePillar7(transcript),
+      ]);
+      
+      console.log(`[MODEL 4] All 7 pillar scorers completed in ${Date.now() - startTime}ms`);
+      
+      // Combine all indicators from the 7 models
+      const allIndicators = [...p1, ...p2, ...p3, ...p4, ...p5, ...p6, ...p7];
+      const indicators = this.validateIndicators(allIndicators);
+      console.log(`[MODEL 4] Validated ${indicators.length} indicators from parallel scoring`);
 
       // Step 2: Calculate using local calculators (no CSV dependency)
       const pillarCalculator = getPillarCalculator();
