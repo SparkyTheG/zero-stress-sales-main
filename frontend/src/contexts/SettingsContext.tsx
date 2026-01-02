@@ -50,11 +50,13 @@ interface SettingsContextType {
 
 const SettingsContext = createContext<SettingsContextType | null>(null);
 
-const STORAGE_KEY = 'zss_admin_settings';
+// Per-user localStorage key
+const getStorageKey = (userId: string | null) => userId ? `zss_settings_${userId}` : 'zss_settings_guest';
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const userId = user?.id ?? null;
+  const prevUserIdRef = useRef<string | null>(null);
 
   const mergeWithDefaults = useMemo(() => {
     return (incoming: any): AdminSettings => {
@@ -69,36 +71,31 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const [settings, setSettings] = useState<AdminSettings>(() => {
-    // Load from localStorage on init
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        return {
-          ...DEFAULT_SETTINGS,
-          ...parsed,
-          pillarWeights: parsed.pillarWeights || DEFAULT_SETTINGS.pillarWeights,
-          priceTiers: parsed.priceTiers || DEFAULT_SETTINGS.priceTiers,
-          customScriptPrompt: typeof parsed.customScriptPrompt === 'string'
-            ? parsed.customScriptPrompt.slice(0, 70)
-            : DEFAULT_SETTINGS.customScriptPrompt,
-        };
-      }
-    } catch (e) {
-      console.error('Failed to load settings:', e);
-    }
-    return DEFAULT_SETTINGS;
-  });
+  // Start with defaults - will hydrate from Supabase when user logs in
+  const [settings, setSettings] = useState<AdminSettings>(DEFAULT_SETTINGS);
 
   const hydratingRef = useRef(false);
-  const saveTimerRef = useRef<number | null>(null);
-  const lastSavedUserIdRef = useRef<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
 
-  // Hydrate from Supabase when the user logs in (or changes)
+  // Reset to defaults and hydrate from Supabase when user changes
   useEffect(() => {
+    // Detect user change (login, logout, or switch accounts)
+    if (prevUserIdRef.current !== userId) {
+      console.log('[settings] User changed:', prevUserIdRef.current, '->', userId);
+      prevUserIdRef.current = userId;
+      
+      // Reset to defaults immediately when user changes
+      setSettings(DEFAULT_SETTINGS);
+      setLastSaved(null);
+      
+      // If no user, we're done (use defaults)
+      if (!userId) {
+        return;
+      }
+    }
+
+    // Hydrate from Supabase for logged-in user
     if (!userId) return;
 
     let cancelled = false;
@@ -106,21 +103,27 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
     (async () => {
       try {
+        console.log('[settings] Fetching settings for user:', userId);
         const { data, error } = await supabase
           .from('user_settings')
           .select('settings')
           .eq('user_id', userId)
           .maybeSingle();
+        
         if (error) {
           console.error('[settings] fetch error:', error);
           return;
         }
         if (cancelled) return;
+        
         if (data?.settings) {
+          console.log('[settings] Loaded from Supabase:', data.settings);
           setSettings(mergeWithDefaults(data.settings));
+        } else {
+          console.log('[settings] No saved settings found, using defaults');
+          // Keep defaults - user hasn't saved settings yet
         }
       } finally {
-        // give React one tick so the initial setSettings doesn't immediately trigger a save
         setTimeout(() => {
           hydratingRef.current = false;
         }, 0);
@@ -132,14 +135,15 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     };
   }, [userId, mergeWithDefaults]);
 
-  // Save to localStorage whenever settings change (local backup)
+  // Save to per-user localStorage whenever settings change (local backup only)
   useEffect(() => {
+    if (!userId) return; // Don't save to localStorage if not logged in
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+      localStorage.setItem(getStorageKey(userId), JSON.stringify(settings));
     } catch (e) {
       console.error('Failed to save settings to localStorage:', e);
     }
-  }, [settings]);
+  }, [settings, userId]);
 
   // Manual save to Supabase
   const saveToSupabase = async (): Promise<{ success: boolean; error?: string }> => {

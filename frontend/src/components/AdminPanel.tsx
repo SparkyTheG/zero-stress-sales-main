@@ -381,7 +381,12 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
   }
 
   // Logged in but email not verified - show verification pending
-  const isEmailVerified = user.email_confirmed_at || user.confirmed_at;
+  // Check email_confirmed_at (Supabase v2) - it's a timestamp string when verified, null/undefined when not
+  const emailConfirmedAt = (user as any).email_confirmed_at;
+  const isEmailVerified = emailConfirmedAt && emailConfirmedAt !== '';
+  
+  console.log('[AdminPanel] User:', user.email, 'email_confirmed_at:', emailConfirmedAt, 'isVerified:', isEmailVerified);
+  
   if (!isEmailVerified) {
     return (
       <VerificationPendingScreen 
