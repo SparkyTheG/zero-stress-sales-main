@@ -56,7 +56,7 @@ export async function verifySupabaseAccessToken(accessToken: string): Promise<Ve
   return { userId: data.id, email: data.email };
 }
 
-export async function createCallSession(params: { id: string; userId: string; userEmail?: string | null; title?: string; meta?: any }) {
+export async function createCallSession(params: { id: string; userId: string; userEmail?: string | null; title?: string; meta?: any; aiAnalyzed?: boolean }) {
   const serviceKey = getServiceKey();
   if (!serviceKey) throw new Error('Supabase env not configured (SUPABASE_SERVICE_ROLE_KEY)');
 
@@ -66,6 +66,7 @@ export async function createCallSession(params: { id: string; userId: string; us
     user_email: params.userEmail ?? null,
     title: params.title ?? null,
     meta: params.meta ?? {},
+    ai_analyzed: params.aiAnalyzed ?? false,
   };
 
   const res = await supabaseFetch('/rest/v1/call_sessions', {
