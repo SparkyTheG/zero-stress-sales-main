@@ -56,13 +56,14 @@ export async function verifySupabaseAccessToken(accessToken: string): Promise<Ve
   return { userId: data.id, email: data.email };
 }
 
-export async function createCallSession(params: { id: string; userId: string; title?: string; meta?: any }) {
+export async function createCallSession(params: { id: string; userId: string; userEmail?: string | null; title?: string; meta?: any }) {
   const serviceKey = getServiceKey();
   if (!serviceKey) throw new Error('Supabase env not configured (SUPABASE_SERVICE_ROLE_KEY)');
 
   const payload = {
     id: params.id,
     user_id: params.userId,
+    user_email: params.userEmail ?? null,
     title: params.title ?? null,
     meta: params.meta ?? {},
   };

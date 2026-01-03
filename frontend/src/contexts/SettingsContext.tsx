@@ -56,6 +56,7 @@ const getStorageKey = (userId: string | null) => userId ? `zss_settings_${userId
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const userId = user?.id ?? null;
+  const userEmail = user?.email ?? null;
   const prevUserIdRef = useRef<string | null>(null);
 
   const mergeWithDefaults = useMemo(() => {
@@ -155,6 +156,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     try {
       const payload = {
         user_id: userId,
+        user_email: userEmail,
         settings,
         updated_at: new Date().toISOString(),
       };

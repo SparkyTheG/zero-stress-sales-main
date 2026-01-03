@@ -34,6 +34,7 @@ interface ClientSession {
 
   // Supabase persistence (only when authenticated)
   authUserId?: string;
+  authEmail?: string;
   supabaseCallSessionId?: string;
   transcriptSeq: number;
   transcriptBuffer: TranscriptChunkRow[];
@@ -128,36 +129,41 @@ export class ConversationWebSocketServer {
         if (message.text) {
           const speaker = message.speaker || 'unknown';
           const timestamp = Date.now();
+          const isFinal = message.isFinal !== false;
           
           // Update admin settings if provided
           if (message.settings) {
             session.adminSettings = message.settings;
           }
-          
-          // Add to session transcript
-          session.transcript.push({
-            text: message.text,
-            speaker,
-            timestamp,
-          });
-          // Cap transcript to avoid memory growth over long testing sessions
-          if (session.transcript.length > ConversationWebSocketServer.MAX_SESSION_CHUNKS) {
-            session.transcript.splice(0, session.transcript.length - ConversationWebSocketServer.MAX_SESSION_CHUNKS);
+        
+          // Only store + analyze FINAL transcript chunks to avoid partial spam like:
+          // "it's kind", "it's kind of", "it's kind of expensive"
+          if (isFinal) {
+            // Add to session transcript
+            session.transcript.push({
+              text: message.text,
+              speaker,
+              timestamp,
+            });
+            // Cap transcript to avoid memory growth over long testing sessions
+            if (session.transcript.length > ConversationWebSocketServer.MAX_SESSION_CHUNKS) {
+              session.transcript.splice(0, session.transcript.length - ConversationWebSocketServer.MAX_SESSION_CHUNKS);
+            }
+
+            // Add to GPT analyzer
+            session.gptAnalyzer.addTranscript(message.text, speaker);
+
+            // Stream transcript to Supabase (only for authenticated users)
+            this.enqueueTranscriptPersist(session, message.text, speaker);
+
+            if (ConversationWebSocketServer.DEBUG) console.log(`[${session.sessionId}] ${speaker}: ${message.text}`);
           }
-
-          // Add to GPT analyzer
-          session.gptAnalyzer.addTranscript(message.text, speaker);
-
-          // Stream transcript to Supabase (only for authenticated users)
-          this.enqueueTranscriptPersist(session, message.text, speaker);
-
-          if (ConversationWebSocketServer.DEBUG) console.log(`[${session.sessionId}] ${speaker}: ${message.text}`);
 
           // FAST: reduced debounce from 1500ms to 800ms for quicker response
           const now = Date.now();
           const timeSinceLastAnalysis = now - (session.lastAnalysisTime || 0);
           
-          if (message.isFinal !== false && timeSinceLastAnalysis > 800) {
+          if (isFinal && timeSinceLastAnalysis > 800) {
             // Schedule analysis (non-blocking)
             if (ConversationWebSocketServer.DEBUG) console.log(`[${session.sessionId}] Scheduling analysis (time since last: ${timeSinceLastAnalysis}ms)`);
             this.scheduleAnalysis(session);
@@ -290,6 +296,7 @@ export class ConversationWebSocketServer {
     if (!token) {
       // Treat empty token as logout / no persistence
       session.authUserId = undefined;
+      session.authEmail = undefined;
       session.supabaseCallSessionId = undefined;
       session.transcriptBuffer = [];
       session.transcriptSeq = 0;
@@ -297,8 +304,9 @@ export class ConversationWebSocketServer {
       return;
     }
 
-    const { userId } = await verifySupabaseAccessToken(token);
+    const { userId, email } = await verifySupabaseAccessToken(token);
     session.authUserId = userId;
+    session.authEmail = email;
     this.sendIfOpen(session.ws, { type: 'auth_ok', userId });
   }
 
@@ -310,7 +318,7 @@ export class ConversationWebSocketServer {
       const callId = randomUUID();
       session.supabaseCallSessionId = callId;
       // Best-effort create; if it fails we'll keep trying on subsequent chunks
-      createCallSession({ id: callId, userId: session.authUserId, meta: { ws_session_id: session.sessionId } })
+      createCallSession({ id: callId, userId: session.authUserId, userEmail: session.authEmail ?? null, meta: { ws_session_id: session.sessionId } })
         .then(() => this.sendIfOpen(session.ws, { type: 'call_session', callSessionId: callId }))
         .catch((err) => {
           if (ConversationWebSocketServer.DEBUG) console.warn(`[${session.sessionId}] createCallSession failed:`, err?.message || err);
