@@ -256,7 +256,7 @@ export class GPTConversationAnalyzer {
   // Performance: cap memory + prompt size so the app doesn't slow down over long sessions
   private static readonly MAX_HISTORY_LINES_STORED = 250; // hard cap in memory
   private static readonly MAX_WINDOW_LINES_FOR_AI = 80; // rolling window used for AI analysis
-  private static readonly MAX_WINDOW_CHARS_FOR_AI = 12000; // rolling window used for AI analysis
+  private static readonly MAX_WINDOW_CHARS_FOR_AI = 8000; // rolling window used for AI analysis
   private static readonly MAX_SCRIPT_CACHE_ITEMS = 120; // prevent unbounded cache growth
   private static readonly DEBUG = process.env.DEBUG_LOGS === '1';
 
