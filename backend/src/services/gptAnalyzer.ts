@@ -253,6 +253,12 @@ export class GPTConversationAnalyzer {
   // Cache for last analysis to avoid re-processing same data
   private lastAnalysisHash: string = '';
   private lastAnalysisResult: AnalysisResult | null = null;
+  // Performance: cap memory + prompt size so the app doesn't slow down over long sessions
+  private static readonly MAX_HISTORY_LINES_STORED = 250; // hard cap in memory
+  private static readonly MAX_WINDOW_LINES_FOR_AI = 80; // rolling window used for AI analysis
+  private static readonly MAX_WINDOW_CHARS_FOR_AI = 12000; // rolling window used for AI analysis
+  private static readonly MAX_SCRIPT_CACHE_ITEMS = 120; // prevent unbounded cache growth
+  private static readonly DEBUG = process.env.DEBUG_LOGS === '1';
 
   constructor(apiKey: string) {
     this.openai = new OpenAI({ apiKey });
@@ -267,10 +273,27 @@ export class GPTConversationAnalyzer {
     const timestamp = new Date().toISOString();
     const speakerLabel = speaker === 'closer' ? 'CLOSER' : speaker === 'prospect' ? 'PROSPECT' : 'SPEAKER';
     this.conversationHistory.push(`[${timestamp}] ${speakerLabel}: ${text}`);
+    // Hard-cap history to prevent memory growth + GC slowdown
+    if (this.conversationHistory.length > GPTConversationAnalyzer.MAX_HISTORY_LINES_STORED) {
+      this.conversationHistory.splice(0, this.conversationHistory.length - GPTConversationAnalyzer.MAX_HISTORY_LINES_STORED);
+    }
   }
 
   getFullTranscript(): string {
     return this.conversationHistory.join('\n');
+  }
+
+  // Use a rolling window for AI prompts to keep latency stable over long calls
+  private getWindowedTranscriptForAI(): string {
+    const lines = this.conversationHistory.slice(-GPTConversationAnalyzer.MAX_WINDOW_LINES_FOR_AI);
+    let t = lines.join('\n');
+    if (t.length > GPTConversationAnalyzer.MAX_WINDOW_CHARS_FOR_AI) {
+      t = t.slice(-GPTConversationAnalyzer.MAX_WINDOW_CHARS_FOR_AI);
+      // Try to avoid starting mid-line if possible
+      const idx = t.indexOf('\n');
+      if (idx > 0 && idx < 200) t = t.slice(idx + 1);
+    }
+    return t;
   }
 
   clearHistory() {
@@ -278,7 +301,7 @@ export class GPTConversationAnalyzer {
   }
 
   async analyze(): Promise<AnalysisResult> {
-    const transcript = this.getFullTranscript();
+    const transcript = this.getWindowedTranscriptForAI();
     
     if (!transcript || transcript.trim().length === 0) {
       return this.getDefaultResult();
@@ -286,7 +309,7 @@ export class GPTConversationAnalyzer {
 
     try {
       const startTime = Date.now();
-      console.log('[6-MODEL] Starting all 6 specialized models in parallel...');
+      if (GPTConversationAnalyzer.DEBUG) console.log('[6-MODEL] Starting all 6 specialized models in parallel...');
 
       // Run all 6 models in PARALLEL - each is self-contained
       const [psychologicalDials, objections, lubometer, truthIndex, redFlags] = await Promise.all([
@@ -302,7 +325,7 @@ export class GPTConversationAnalyzer {
         ? await this.analyzeModel3_Scripts(transcript, objections)
         : {};
       
-      console.log(`[6-MODEL] All models completed in ${Date.now() - startTime}ms`);
+      if (GPTConversationAnalyzer.DEBUG) console.log(`[6-MODEL] All models completed in ${Date.now() - startTime}ms`);
       
       // Combine results
       const result: AnalysisResult = {
@@ -329,7 +352,7 @@ export class GPTConversationAnalyzer {
         objectionScripts: scripts,
       };
       
-      console.log(`[TOTAL] Analysis completed in ${Date.now() - startTime}ms`);
+      if (GPTConversationAnalyzer.DEBUG) console.log(`[TOTAL] Analysis completed in ${Date.now() - startTime}ms`);
       return result;
     } catch (error) {
       console.error('Error analyzing with 6 models:', error);
@@ -340,7 +363,7 @@ export class GPTConversationAnalyzer {
   // Progressive analysis - 6 PARALLEL AI models, each with specialized prompts
   // Each model ONLY analyzes what's relevant to its specific task for maximum speed
   async analyzeProgressive(sendPartial: (type: string, data: any) => void, adminSettings?: any): Promise<void> {
-    const transcript = this.getFullTranscript();
+    const transcript = this.getWindowedTranscriptForAI();
     
     if (!transcript || transcript.trim().length === 0) {
       return;
@@ -348,20 +371,20 @@ export class GPTConversationAnalyzer {
 
     try {
       const startTime = Date.now();
-      console.log('[6-MODEL PARALLEL] Starting all 6 specialized models simultaneously...');
+      if (GPTConversationAnalyzer.DEBUG) console.log('[6-MODEL PARALLEL] Starting all 6 specialized models simultaneously...');
 
       // ALL 6 MODELS RUN IN PARALLEL - each has its own specialized prompt
       
       // Model 1: Psychological Dials - ONLY analyzes emotional/psychological patterns
       const psychologicalDialsPromise = this.analyzeModel1_PsychologicalDials(transcript).then(result => {
-        console.log(`[MODEL 1 - DIALS] ✓ Completed in ${Date.now() - startTime}ms`);
+        if (GPTConversationAnalyzer.DEBUG) console.log(`[MODEL 1 - DIALS] ✓ Completed in ${Date.now() - startTime}ms`);
         sendPartial('analysis_partial', { psychologicalDials: result });
         return result;
       });
 
       // Model 2: Objections Detection - ONLY detects objections from speech
       const objectionsPromise = this.analyzeModel2_Objections(transcript).then(result => {
-        console.log(`[MODEL 2 - OBJECTIONS] ✓ Completed in ${Date.now() - startTime}ms, found ${result?.length || 0}`);
+        if (GPTConversationAnalyzer.DEBUG) console.log(`[MODEL 2 - OBJECTIONS] ✓ Completed in ${Date.now() - startTime}ms, found ${result?.length || 0}`);
         sendPartial('analysis_partial', { objections: result });
         return result;
       });
@@ -369,11 +392,11 @@ export class GPTConversationAnalyzer {
       // Model 3: Scripts - Waits for objections, then generates 2 scripts per objection
       const scriptsPromise = objectionsPromise.then(objections => {
         if (!objections || objections.length === 0) {
-          console.log(`[MODEL 3 - SCRIPTS] No objections, skipping`);
+          if (GPTConversationAnalyzer.DEBUG) console.log(`[MODEL 3 - SCRIPTS] No objections, skipping`);
           return {};
         }
         return this.analyzeModel3_Scripts(transcript, objections, adminSettings?.customScriptPrompt).then(result => {
-          console.log(`[MODEL 3 - SCRIPTS] ✓ Completed in ${Date.now() - startTime}ms, ${Object.keys(result).length} scripts`);
+          if (GPTConversationAnalyzer.DEBUG) console.log(`[MODEL 3 - SCRIPTS] ✓ Completed in ${Date.now() - startTime}ms, ${Object.keys(result).length} scripts`);
           sendPartial('analysis_scripts', { objectionScripts: result });
           return result;
         });
@@ -381,7 +404,7 @@ export class GPTConversationAnalyzer {
 
       // Model 4: Lubometer - ONLY analyzes indicators relevant to buying readiness
       const lubometerPromise = this.analyzeModel4_Lubometer(transcript, adminSettings?.pillarWeights).then(result => {
-        console.log(`[MODEL 4 - LUBOMETER] ✓ Completed in ${Date.now() - startTime}ms, score: ${result.finalScore}`);
+        if (GPTConversationAnalyzer.DEBUG) console.log(`[MODEL 4 - LUBOMETER] ✓ Completed in ${Date.now() - startTime}ms, score: ${result.finalScore}`);
         sendPartial('analysis_partial', { 
           lubometer: result,
           pillars: result.pillars,
@@ -1249,13 +1272,23 @@ CRITICAL:
           this.scriptCache.set(hash, { 
             scripts: Object.fromEntries(objScriptsArray.map((s, i) => [`_${i+1}`, s])),
           });
-          console.log(`[CACHE SET] Cached ${objScriptsArray.length} scripts for "${obj.text?.substring(0, 30)}..." (${obj.id})`);
+          // Cap cache size (Map preserves insertion order)
+          while (this.scriptCache.size > GPTConversationAnalyzer.MAX_SCRIPT_CACHE_ITEMS) {
+            const oldestKey = this.scriptCache.keys().next().value;
+            if (!oldestKey) break;
+            this.scriptCache.delete(oldestKey);
+          }
+          if (GPTConversationAnalyzer.DEBUG) {
+            console.log(`[CACHE SET] Cached ${objScriptsArray.length} scripts for "${obj.text?.substring(0, 30)}..." (${obj.id})`);
+          }
         }
       }
 
       // Merge cached + new scripts and return
       const allScripts = { ...cachedScripts, ...newScripts };
-      console.log(`[SCRIPTS] Returning ${Object.keys(allScripts).length} total scripts:`, Object.keys(allScripts));
+      if (GPTConversationAnalyzer.DEBUG) {
+        console.log(`[SCRIPTS] Returning ${Object.keys(allScripts).length} total scripts:`, Object.keys(allScripts));
+      }
       return allScripts;
     } catch (error) {
       console.error('Error in script generation model:', error);
@@ -1278,7 +1311,7 @@ CRITICAL:
       const cached = this.scriptCache.get(hash);
       
       if (cached) {
-        console.log(`[Cache HIT] Script for "${obj.text?.substring(0, 30)}..."`);
+        if (GPTConversationAnalyzer.DEBUG) console.log(`[Cache HIT] Script for "${obj.text?.substring(0, 30)}..."`);
         scripts[obj.id] = cached;
       } else {
         newObjections.push(obj);
@@ -1287,7 +1320,7 @@ CRITICAL:
 
     // Only generate scripts for NEW objections
     if (newObjections.length > 0) {
-      console.log(`[Cache MISS] Generating ${newObjections.length} new script(s)...`);
+      if (GPTConversationAnalyzer.DEBUG) console.log(`[Cache MISS] Generating ${newObjections.length} new script(s)...`);
       const newScripts = await this.generateObjectionScripts(transcript, newObjections);
       
       // Add to cache and results
@@ -1295,6 +1328,11 @@ CRITICAL:
         const hash = this.getObjectionHash(obj);
         if (newScripts[obj.id]) {
           this.scriptCache.set(hash, newScripts[obj.id]);
+          while (this.scriptCache.size > GPTConversationAnalyzer.MAX_SCRIPT_CACHE_ITEMS) {
+            const oldestKey = this.scriptCache.keys().next().value;
+            if (!oldestKey) break;
+            this.scriptCache.delete(oldestKey);
+          }
           scripts[obj.id] = newScripts[obj.id];
         }
       }

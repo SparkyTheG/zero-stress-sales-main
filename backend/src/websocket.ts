@@ -29,6 +29,8 @@ export class ConversationWebSocketServer {
   private wss: WebSocketServer;
   private sessions: Map<string, ClientSession> = new Map();
   private openaiApiKey: string;
+  private static readonly DEBUG = process.env.DEBUG_LOGS === '1';
+  private static readonly MAX_SESSION_CHUNKS = 250; // cap memory per session
 
   constructor(server: Server, openaiApiKey: string) {
     this.openaiApiKey = openaiApiKey;
@@ -38,7 +40,7 @@ export class ConversationWebSocketServer {
       this.handleConnection(ws);
     });
 
-    console.log(`WebSocket server attached to HTTP server`);
+    if (ConversationWebSocketServer.DEBUG) console.log(`WebSocket server attached to HTTP server`);
   }
 
   private handleConnection(ws: WebSocket) {
@@ -81,7 +83,7 @@ export class ConversationWebSocketServer {
       sessionId,
     }));
 
-    console.log(`New session connected: ${sessionId}`);
+    if (ConversationWebSocketServer.DEBUG) console.log(`New session connected: ${sessionId}`);
   }
 
   private handleMessage(session: ClientSession, message: any) {
@@ -89,7 +91,7 @@ export class ConversationWebSocketServer {
       case 'audio':
         // Handle audio data (future enhancement for direct audio processing)
         if (message.data) {
-          console.log('Audio data received, length:', message.data.length);
+          if (ConversationWebSocketServer.DEBUG) console.log('Audio data received, length:', message.data.length);
         }
         break;
 
@@ -110,11 +112,15 @@ export class ConversationWebSocketServer {
             speaker,
             timestamp,
           });
+          // Cap transcript to avoid memory growth over long testing sessions
+          if (session.transcript.length > ConversationWebSocketServer.MAX_SESSION_CHUNKS) {
+            session.transcript.splice(0, session.transcript.length - ConversationWebSocketServer.MAX_SESSION_CHUNKS);
+          }
 
           // Add to GPT analyzer
           session.gptAnalyzer.addTranscript(message.text, speaker);
 
-          console.log(`[${session.sessionId}] ${speaker}: ${message.text}`);
+          if (ConversationWebSocketServer.DEBUG) console.log(`[${session.sessionId}] ${speaker}: ${message.text}`);
 
           // FAST: reduced debounce from 1500ms to 800ms for quicker response
           const now = Date.now();
@@ -122,7 +128,7 @@ export class ConversationWebSocketServer {
           
           if (message.isFinal !== false && timeSinceLastAnalysis > 800) {
             // Schedule analysis (non-blocking)
-            console.log(`[${session.sessionId}] Scheduling analysis (time since last: ${timeSinceLastAnalysis}ms)`);
+            if (ConversationWebSocketServer.DEBUG) console.log(`[${session.sessionId}] Scheduling analysis (time since last: ${timeSinceLastAnalysis}ms)`);
             this.scheduleAnalysis(session);
           }
         }
@@ -132,7 +138,7 @@ export class ConversationWebSocketServer {
         // Update admin settings
         if (message.settings) {
           session.adminSettings = message.settings;
-          console.log(`[${session.sessionId}] Admin settings updated`);
+          if (ConversationWebSocketServer.DEBUG) console.log(`[${session.sessionId}] Admin settings updated`);
         }
         break;
 
@@ -141,7 +147,7 @@ export class ConversationWebSocketServer {
         if (message.settings) {
           session.adminSettings = message.settings;
         }
-        console.log(`[${session.sessionId}] Manual analysis requested`);
+        if (ConversationWebSocketServer.DEBUG) console.log(`[${session.sessionId}] Manual analysis requested`);
         this.scheduleAnalysis(session);
         break;
 
@@ -149,7 +155,7 @@ export class ConversationWebSocketServer {
         // Clear conversation history
         session.transcript = [];
         session.gptAnalyzer.clearHistory();
-        console.log(`[${session.sessionId}] Conversation cleared`);
+        if (ConversationWebSocketServer.DEBUG) console.log(`[${session.sessionId}] Conversation cleared`);
         break;
 
       default:
@@ -162,7 +168,7 @@ export class ConversationWebSocketServer {
     // If already analyzing, mark pending and return immediately
     if (session.isAnalyzing) {
       session.pendingAnalysis = true;
-      console.log(`[${session.sessionId}] Analysis already running, marked pending`);
+      if (ConversationWebSocketServer.DEBUG) console.log(`[${session.sessionId}] Analysis already running, marked pending`);
       return;
     }
     
@@ -175,7 +181,7 @@ export class ConversationWebSocketServer {
       
       // If a new analysis was requested while we were busy, run it now
       if (session.pendingAnalysis) {
-        console.log(`[${session.sessionId}] Running pending analysis`);
+        if (ConversationWebSocketServer.DEBUG) console.log(`[${session.sessionId}] Running pending analysis`);
         this.scheduleAnalysis(session);
       }
     });
@@ -188,7 +194,7 @@ export class ConversationWebSocketServer {
       session.currentRunId++;
       const runId = session.currentRunId;
       
-      console.log(`[${session.sessionId}] Starting progressive analysis (run ${runId})...`);
+      if (ConversationWebSocketServer.DEBUG) console.log(`[${session.sessionId}] Starting progressive analysis (run ${runId})...`);
       
       // Send updates progressively as they become available - include runId for stale detection
       const sendPartial = (type: string, data: any) => {
@@ -204,7 +210,7 @@ export class ConversationWebSocketServer {
       // Analyze with progressive callbacks, passing admin settings
       await session.gptAnalyzer.analyzeProgressive(sendPartial, session.adminSettings);
       
-      console.log(`[${session.sessionId}] Progressive analysis completed (run ${runId})`);
+      if (ConversationWebSocketServer.DEBUG) console.log(`[${session.sessionId}] Progressive analysis completed (run ${runId})`);
     } catch (error) {
       console.error('Error analyzing conversation:', error);
       if (session.ws.readyState === WebSocket.OPEN) {
@@ -223,7 +229,7 @@ export class ConversationWebSocketServer {
         clearInterval(session.analysisInterval);
       }
       this.sessions.delete(sessionId);
-      console.log(`Session cleaned up: ${sessionId}`);
+      if (ConversationWebSocketServer.DEBUG) console.log(`Session cleaned up: ${sessionId}`);
     }
   }
 
