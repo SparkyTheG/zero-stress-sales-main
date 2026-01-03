@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
-import { User, Settings, Users, Star, Sliders } from 'lucide-react';
+import { Settings, Users, Star, Sliders } from 'lucide-react';
 import WhisperEngine from './components/WhisperEngine';
 import Lubometer from './components/Lubometer';
 import PsychologicalDials from './components/PsychologicalDials';
@@ -8,6 +8,7 @@ import RedFlags from './components/RedFlags';
 import TopObjections from './components/TopObjections';
 import AdminPanel from './components/AdminPanel';
 import { useSettings } from './contexts/SettingsContext';
+import { useAuth } from './contexts/AuthContext';
 
 // Memoized versions of expensive components to avoid unnecessary re-renders
 const MemoizedLubometer = memo(Lubometer);
@@ -146,6 +147,7 @@ function App() {
   const [showPricing, setShowPricing] = useState(false);
   const [showFoundingMember, setShowFoundingMember] = useState(false);
   const { settings } = useSettings();
+  const { session } = useAuth();
   
   // Real-time analysis state - start empty, only show real AI data
   const [objections, setObjections] = useState<Objection[]>([]);
@@ -157,7 +159,6 @@ function App() {
   const [lubometerTiers, setLubometerTiers] = useState<LubometerTier[]>([]);
   const [truthIndexScore, setTruthIndexScore] = useState(0);
   const [aiObjectionScripts, setAiObjectionScripts] = useState<Record<string, any>>({});
-  const [isRecording, setIsRecording] = useState(false);
   const [wsClientRef, setWsClientRef] = useState<ReturnType<typeof getWebSocketClient> | null>(null);
 
 
@@ -278,6 +279,12 @@ function App() {
     }
   }, []);
 
+  // Provide auth token to backend so it can persist call sessions + transcript chunks per logged-in user
+  useEffect(() => {
+    if (!wsClientRef) return;
+    wsClientRef.setAuthToken(session?.access_token ?? null);
+  }, [wsClientRef, session?.access_token]);
+
   // If the selected objection disappears from the rolling window, clear selection
   useEffect(() => {
     if (selectedObjection && !objections.some(o => o.id === selectedObjection)) {
@@ -306,16 +313,13 @@ function App() {
     }
   }, [wsClientRef, settings]);
 
-  const handleRecordingStateChange = useCallback((recording: boolean) => {
-    setIsRecording(recording);
-    console.log('Recording state:', recording ? 'Started' : 'Stopped');
-  }, []);
-
   const handleObjectionClick = (objectionId: string) => {
     // Disabled auto-scroll - user requested no scrolling on click
+    void objectionId;
   };
 
   const handleSelectCall = (callId: string) => {
+    void callId;
     setView('dashboard');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -376,10 +380,7 @@ function App() {
               <div className="text-sm text-gray-400">Closer Co-Pilot</div>
             </div>
             <div className="flex items-center gap-4">
-              <RecordingButton
-                onTranscript={handleTranscript}
-                onRecordingStateChange={handleRecordingStateChange}
-              />
+                <RecordingButton onTranscript={handleTranscript} />
               <button
                 onClick={() => setView('admin')}
                 className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600/60 to-cyan-600/60 hover:from-purple-600 hover:to-cyan-600 border border-purple-500/50 rounded-lg transition-all group"

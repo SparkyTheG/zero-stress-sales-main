@@ -71,7 +71,7 @@ export default function RecordingButton({ onTranscript, onRecordingStateChange }
       }
     };
 
-    recognition.onerror = (event) => {
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       console.error('Speech recognition error:', event.error);
       
       // Don't auto-restart on these errors
@@ -96,7 +96,7 @@ export default function RecordingButton({ onTranscript, onRecordingStateChange }
       onRecordingStateChange?.(false);
     };
 
-    recognition.onresult = (event) => {
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
       let interimTranscript = '';
       let finalTranscript = '';
 

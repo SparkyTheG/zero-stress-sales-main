@@ -45,6 +45,8 @@ export class AnalysisWebSocket {
   private onErrorCallback?: (error: Error) => void;
   // Track latest run ID to ignore stale updates
   private latestRunId = 0;
+  // Supabase access token (if logged in) for backend-authenticated persistence
+  private accessToken: string | null = null;
 
   constructor(private url: string = getDefaultWebSocketUrl()) {
     console.log('WebSocket URL:', this.url);
@@ -57,6 +59,10 @@ export class AnalysisWebSocket {
       this.ws.onopen = () => {
         console.log('WebSocket connected');
         this.reconnectAttempts = 0;
+        // Send auth token ASAP so backend can persist transcripts for logged-in users
+        if (this.accessToken) {
+          this.sendAuth(this.accessToken);
+        }
       };
 
       this.ws.onmessage = (event) => {
@@ -153,6 +159,28 @@ export class AnalysisWebSocket {
         speaker,
         isFinal,
         settings, // Pass admin settings to backend
+      }));
+    }
+  }
+
+  setAuthToken(token: string | null) {
+    this.accessToken = token ? String(token) : null;
+    // If already connected, send immediately
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      if (this.accessToken) {
+        this.sendAuth(this.accessToken);
+      } else {
+        // clear auth on backend
+        this.ws.send(JSON.stringify({ type: 'auth', accessToken: null }));
+      }
+    }
+  }
+
+  private sendAuth(accessToken: string) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({
+        type: 'auth',
+        accessToken,
       }));
     }
   }

@@ -1,4 +1,4 @@
-import { X, TrendingUp, Target, Zap, Shield, Users, DollarSign, Rocket, Brain, Lock, Crown, CheckCircle2, ArrowRight, FileText, Megaphone, Star, Award, TrendingUp as Growth } from 'lucide-react';
+import { X, TrendingUp, Target, Zap, Shield, DollarSign, Rocket, Brain, Lock, Crown, CheckCircle2, ArrowRight, FileText, Megaphone, Star, Award, TrendingUp as Growth } from 'lucide-react';
 import { useState } from 'react';
 import BusinessPlanPage from './BusinessPlanPage';
 import MarketingPlanPage from './MarketingPlanPage';

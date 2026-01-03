@@ -8,14 +8,18 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 export const supabase: SupabaseClient<any> = (supabaseUrl && supabaseAnonKey)
   ? createClient(supabaseUrl, supabaseAnonKey)
   : ({
-      from: (table: string) => ({
-        select: () => Promise.resolve({ data: null, error: null }),
-        insert: () => Promise.resolve({ data: null, error: null }),
-        update: () => Promise.resolve({ data: null, error: null }),
-        delete: () => Promise.resolve({ data: null, error: null }),
-        maybeSingle: () => Promise.resolve({ data: null, error: null }),
-        upsert: () => Promise.resolve({ data: null, error: null }),
-      }),
+      from: (table: string) => {
+        // keep signature compatible while avoiding unused-param TS errors
+        void table;
+        return {
+          select: () => Promise.resolve({ data: null, error: null }),
+          insert: () => Promise.resolve({ data: null, error: null }),
+          update: () => Promise.resolve({ data: null, error: null }),
+          delete: () => Promise.resolve({ data: null, error: null }),
+          maybeSingle: () => Promise.resolve({ data: null, error: null }),
+          upsert: () => Promise.resolve({ data: null, error: null }),
+        };
+      },
       auth: {
         getSession: () => Promise.resolve({ data: { session: null }, error: null }),
         getUser: () => Promise.resolve({ data: { user: null }, error: null }),

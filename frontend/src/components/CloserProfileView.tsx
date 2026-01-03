@@ -17,7 +17,6 @@ export default function CloserProfileView({ profile: initialProfile, onBack }: C
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [profile, setProfile] = useState<CloserProfile>(initialProfile);
-  const [loading, setLoading] = useState(false);
   const [callCount, setCallCount] = useState(0);
   const [showDebrief, setShowDebrief] = useState(false);
 
@@ -68,7 +67,6 @@ export default function CloserProfileView({ profile: initialProfile, onBack }: C
   };
 
   const handleSave = async (updatedProfile: CloserProfile) => {
-    setLoading(true);
     try {
       const { data: existing } = await supabase
         .from('closer_profiles')
@@ -118,8 +116,6 @@ export default function CloserProfileView({ profile: initialProfile, onBack }: C
     } catch (error) {
       console.error('Error saving profile:', error);
       alert('Failed to save profile. Please try again.');
-    } finally {
-      setLoading(false);
     }
   };
 

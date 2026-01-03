@@ -1,4 +1,4 @@
-import { X, Target, Users, MessageSquare, Handshake, TrendingUp, Megaphone, Video, FileText, Award, Zap, Mail } from 'lucide-react';
+import { X, Users, MessageSquare, Handshake, TrendingUp, Megaphone, Video, FileText, Zap, Mail } from 'lucide-react';
 
 interface MarketingPlanPageProps {
   onClose: () => void;

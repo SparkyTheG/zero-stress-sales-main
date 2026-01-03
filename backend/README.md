@@ -15,6 +15,10 @@ OPENAI_API_KEY=your_openai_api_key_here
 PORT=3001
 WS_PORT=3001
 NODE_ENV=development
+
+# Optional (only needed if you want to persist live call sessions + transcript chunks to Supabase):
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 ```
 
 3. Build TypeScript:
@@ -43,12 +47,16 @@ The server runs a WebSocket server on the same port (default: 3001).
 ### WebSocket Messages
 
 **Client → Server:**
+- `{ type: "auth", accessToken: string | null }` - Authenticate this WebSocket (required for Supabase transcript persistence)
 - `{ type: "transcript", text: string, speaker?: "closer" | "prospect" | "unknown" }` - Send conversation transcript
 - `{ type: "analyze" }` - Request immediate analysis
 - `{ type: "audio", data: string }` - Send audio data (base64 encoded)
 
 **Server → Client:**
 - `{ type: "session", sessionId: string }` - Session established
+- `{ type: "auth_ok", userId: string | null }` - Auth accepted (or cleared if null)
+- `{ type: "auth_error", error: string }` - Auth failed
+- `{ type: "call_session", callSessionId: string }` - Supabase call session created (only when authenticated)
 - `{ type: "analysis", data: AnalysisResult }` - Analysis results (sent periodically and on request)
 - `{ type: "error", error: string }` - Error occurred
 

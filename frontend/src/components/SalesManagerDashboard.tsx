@@ -1,4 +1,4 @@
-import { TrendingUp, TrendingDown, Minus, AlertTriangle, CheckCircle, Phone, DollarSign, Target, Clock, Activity, Award, AlertCircle, ShieldAlert, ArrowLeft } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, AlertTriangle, Phone, DollarSign, Target, Clock, Activity, Award, AlertCircle, ShieldAlert, ArrowLeft } from 'lucide-react';
 import { SalesManagerProfile, CloserOverview } from '../types';
 
 interface SalesManagerDashboardProps {
