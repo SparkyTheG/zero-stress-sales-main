@@ -2,7 +2,9 @@ import OpenAI from 'openai';
 import {
   createCallSession,
   endCallSession,
+  fetchTranscriptChunksForSession,
   insertTranscriptChunks,
+  insertCallSessionSummary,
   type TranscriptChunkRow,
 } from './supabaseTranscriptStore.js';
 import { randomUUID } from 'crypto';
@@ -36,6 +38,16 @@ Rules:
 
 Respond with ONLY one word: "closer" or "prospect"`;
 
+const SUMMARY_SYSTEM = `You are an expert sales call analyst for "Zero-Stress Sales".
+
+Your job: produce high-signal conversation summaries from transcript text.
+
+Hard rules:
+- Use ONLY information present in the transcript. Do NOT invent names, numbers, companies, results, or timelines.
+- If a name/company isn't explicitly stated, write "the closer" / "the prospect" (no made-up names).
+- Be concise, specific, and actionable for the closer.
+- Output MUST be valid JSON only. No markdown, no commentary.`;
+
 interface AnalyzedChunk {
   text: string;
   speaker: 'closer' | 'prospect';
@@ -48,12 +60,15 @@ interface AgentSession {
   userId: string;
   userEmail?: string | null;
   callSessionId?: string;
+  startedAtMs: number;
   conversationHistory: string; // rolling 8000 char context
   analyzedChunks: AnalyzedChunk[];
   buffer: TranscriptChunkRow[];
   seq: number;
   flushTimer?: NodeJS.Timeout;
   sessionCreated: boolean;
+  lastProgressiveSummaryAtMs?: number;
+  isSummarizing?: boolean;
 }
 
 export class TranscriptAnalyzerAgent {
@@ -62,6 +77,8 @@ export class TranscriptAnalyzerAgent {
   private static readonly MAX_CONTEXT_CHARS = 8000;
   private static readonly FLUSH_INTERVAL_MS = 1000;
   private static readonly FLUSH_MAX_ROWS = 5;
+  private static readonly SUMMARY_MIN_INTERVAL_MS = 2 * 60 * 1000;
+  private static readonly SUMMARY_MIN_CHUNKS = 10;
   private static readonly DEBUG = process.env.DEBUG_LOGS === '1';
 
   constructor(apiKey: string) {
@@ -75,6 +92,7 @@ export class TranscriptAnalyzerAgent {
     this.sessions.set(wsSessionId, {
       userId,
       userEmail,
+      startedAtMs: Date.now(),
       conversationHistory: '',
       analyzedChunks: [],
       buffer: [],
@@ -306,6 +324,13 @@ export class TranscriptAnalyzerAgent {
         if (TranscriptAnalyzerAgent.DEBUG) {
           console.log(`[AI Agent] Ended call session ${session.callSessionId}`);
         }
+        // Final summary (fire-and-forget; endSession is already called non-blocking from websocket cleanup)
+        this.generateAndPersistSummary(wsSessionId, 'final').catch((err) => {
+          if (TranscriptAnalyzerAgent.DEBUG) console.warn('[AI Agent] Final summary failed:', err?.message || err);
+        });
+      } else if (!endSession) {
+        // Progressive summary (throttled)
+        this.maybeGenerateProgressiveSummary(wsSessionId).catch(() => {});
       }
     } catch (error) {
       // Re-queue for retry
@@ -313,6 +338,166 @@ export class TranscriptAnalyzerAgent {
         session.buffer.unshift(...rows);
       }
       console.error(`[AI Agent] Flush failed:`, error);
+    }
+  }
+
+  private async maybeGenerateProgressiveSummary(wsSessionId: string): Promise<void> {
+    const session = this.sessions.get(wsSessionId);
+    if (!session?.callSessionId) return;
+    if (session.isSummarizing) return;
+    if (session.seq < TranscriptAnalyzerAgent.SUMMARY_MIN_CHUNKS) return;
+
+    const now = Date.now();
+    const last = session.lastProgressiveSummaryAtMs ?? 0;
+    if (now - last < TranscriptAnalyzerAgent.SUMMARY_MIN_INTERVAL_MS) return;
+
+    session.lastProgressiveSummaryAtMs = now;
+    await this.generateAndPersistSummary(wsSessionId, 'progressive');
+  }
+
+  private async generateAndPersistSummary(wsSessionId: string, status: 'progressive' | 'final'): Promise<void> {
+    const session = this.sessions.get(wsSessionId);
+    if (!session?.callSessionId) return;
+    if (session.isSummarizing) return;
+    session.isSummarizing = true;
+
+    try {
+      const chunks = await fetchTranscriptChunksForSession({ sessionId: session.callSessionId });
+      if (!chunks || chunks.length === 0) return;
+
+      const transcriptLines = chunks.map((c) => `${String(c.speaker || 'unknown').toUpperCase()}: ${c.text}`);
+      const transcript = transcriptLines.join('\n');
+
+      const notes = await this.buildNotesFromTranscript(transcript, status);
+      const final = await this.buildFinalSummaryFromNotes(notes, status);
+
+      const title = (final?.title || '').toString().trim().slice(0, 80) || 'conversation';
+      const executiveSummary = (final?.executiveSummary || '').toString().trim();
+      const preview = executiveSummary ? executiveSummary.slice(0, 220) : (JSON.stringify(final) || '').slice(0, 220);
+      const durationSeconds = Math.max(0, Math.round((Date.now() - session.startedAtMs) / 1000));
+
+      await insertCallSessionSummary({
+        session_id: session.callSessionId,
+        user_id: session.userId,
+        user_email: session.userEmail ?? null,
+        status,
+        title,
+        preview,
+        summary: final ?? {},
+        duration_seconds: durationSeconds,
+        model: 'gpt-4o-mini',
+      });
+
+      if (TranscriptAnalyzerAgent.DEBUG) {
+        console.log(`[AI Agent] Stored ${status} summary for session ${session.callSessionId}`);
+      }
+    } finally {
+      const s = this.sessions.get(wsSessionId);
+      if (s) s.isSummarizing = false;
+    }
+  }
+
+  private splitTranscriptByChars(transcript: string, maxChars: number): string[] {
+    const lines = transcript.split('\n');
+    const out: string[] = [];
+    let buf = '';
+    for (const line of lines) {
+      const next = buf ? `${buf}\n${line}` : line;
+      if (next.length > maxChars) {
+        if (buf) out.push(buf);
+        buf = line;
+      } else {
+        buf = next;
+      }
+    }
+    if (buf) out.push(buf);
+    return out;
+  }
+
+  private async buildNotesFromTranscript(transcript: string, status: 'progressive' | 'final'): Promise<string> {
+    const parts = this.splitTranscriptByChars(transcript, 12000);
+    const compactNotes: any[] = [];
+
+    for (const part of parts) {
+      const res = await this.openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        temperature: 0.2,
+        max_tokens: 700,
+        messages: [
+          { role: 'system', content: SUMMARY_SYSTEM },
+          {
+            role: 'user',
+            content:
+              `Summarize this PART of the sales call transcript into compact notes.\n` +
+              `Status: ${status}\n\n` +
+              `Return JSON with EXACT keys:\n` +
+              `{"notes":[...],"objectionsRaised":[...],"objectionsResolved":[...],"decisions":[...],"nextSteps":[...],"signals":{"pain":0,"urgency":0,"trust":0,"budget":0,"decision":0}}\n\n` +
+              `TRANSCRIPT PART:\n${part}`,
+          },
+        ],
+      });
+
+      const txt = res.choices[0]?.message?.content?.trim() || '';
+      try {
+        compactNotes.push(JSON.parse(txt));
+      } catch {
+        compactNotes.push({ notes: [txt] });
+      }
+    }
+
+    const notesStr = JSON.stringify(compactNotes);
+    // Keep notes bounded so final step doesn't balloon
+    return notesStr.length > 30000 ? notesStr.slice(0, 30000) : notesStr;
+  }
+
+  private async buildFinalSummaryFromNotes(notesJson: string, status: 'progressive' | 'final'): Promise<any> {
+    const res = await this.openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      temperature: 0.2,
+      max_tokens: 1100,
+      messages: [
+        { role: 'system', content: SUMMARY_SYSTEM },
+        {
+          role: 'user',
+          content:
+            `Using the notes extracted from the FULL call, produce the final structured summary.\n` +
+            `Status: ${status}\n\n` +
+            `Output JSON with EXACT keys:\n` +
+            `{\n` +
+            `  "title": "short topic (1-3 words)",\n` +
+            `  "executiveSummary": "2-3 sentences",\n` +
+            `  "prospectSituation": "1 paragraph",\n` +
+            `  "keyPoints": ["..."],\n` +
+            `  "objectionsRaised": ["..."],\n` +
+            `  "objectionsResolved": ["..."],\n` +
+            `  "nextSteps": ["..."],\n` +
+            `  "closerPerformance": "1 paragraph",\n` +
+            `  "prospectReadiness": "not_ready|unsure|ready",\n` +
+            `  "recommendations": "1 paragraph"\n` +
+            `}\n\n` +
+            `NOTES JSON:\n${notesJson}`,
+        },
+      ],
+    });
+
+    const txt = res.choices[0]?.message?.content?.trim() || '';
+    try {
+      return JSON.parse(txt);
+    } catch {
+      // Fallback: store something still useful
+      return {
+        title: 'conversation',
+        executiveSummary: txt.slice(0, 400),
+        prospectSituation: '',
+        keyPoints: [],
+        objectionsRaised: [],
+        objectionsResolved: [],
+        nextSteps: [],
+        closerPerformance: '',
+        prospectReadiness: 'unsure',
+        recommendations: '',
+        raw: txt,
+      };
     }
   }
 
