@@ -127,3 +127,91 @@ export async function insertTranscriptChunks(rows: TranscriptChunkRow[]) {
   }
 }
 
+export type CallSessionSummaryRow = {
+  session_id: string;
+  user_id: string;
+  user_email?: string | null;
+  status: 'progressive' | 'final';
+  title?: string | null;
+  preview?: string | null;
+  summary: any;
+  duration_seconds?: number | null;
+  model?: string | null;
+};
+
+export async function insertCallSessionSummary(row: CallSessionSummaryRow) {
+  const serviceKey = getServiceKey();
+  if (!serviceKey) throw new Error('Supabase env not configured (SUPABASE_SERVICE_ROLE_KEY)');
+
+  const payload = {
+    session_id: row.session_id,
+    user_id: row.user_id,
+    user_email: row.user_email ?? null,
+    status: row.status,
+    title: row.title ?? null,
+    preview: row.preview ?? null,
+    summary: row.summary ?? {},
+    duration_seconds: row.duration_seconds ?? null,
+    model: row.model ?? null,
+    updated_at: new Date().toISOString(),
+  };
+
+  const res = await supabaseFetch('/rest/v1/call_session_summaries', {
+    method: 'POST',
+    headers: {
+      ...buildHeaders(serviceKey),
+      Prefer: 'return=minimal',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Failed to insert call session summary (${res.status}): ${text || res.statusText}`);
+  }
+}
+
+export type StoredTranscriptChunk = {
+  seq: number;
+  speaker: string;
+  text: string;
+  created_at?: string;
+};
+
+export async function fetchTranscriptChunksForSession(params: { sessionId: string; limit?: number }): Promise<StoredTranscriptChunk[]> {
+  const serviceKey = getServiceKey();
+  if (!serviceKey) throw new Error('Supabase env not configured (SUPABASE_SERVICE_ROLE_KEY)');
+
+  const all: StoredTranscriptChunk[] = [];
+  const pageSize = Math.max(50, Math.min(1000, params.limit ?? 1000));
+  let offset = 0;
+
+  while (true) {
+    const q =
+      `/rest/v1/call_transcript_chunks` +
+      `?session_id=eq.${encodeURIComponent(params.sessionId)}` +
+      `&select=seq,speaker,text,created_at` +
+      `&order=seq.asc` +
+      `&limit=${pageSize}` +
+      `&offset=${offset}`;
+
+    const res = await supabaseFetch(q, {
+      method: 'GET',
+      headers: buildHeaders(serviceKey),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Failed to fetch transcript chunks (${res.status}): ${text || res.statusText}`);
+    }
+
+    const page = (await res.json()) as StoredTranscriptChunk[];
+    all.push(...page);
+    if (page.length < pageSize) break;
+    offset += pageSize;
+    // Safety cap to avoid runaway loops
+    if (offset > 100000) break;
+  }
+
+  return all;
+}

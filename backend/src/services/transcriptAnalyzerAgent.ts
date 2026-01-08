@@ -324,13 +324,17 @@ export class TranscriptAnalyzerAgent {
         if (TranscriptAnalyzerAgent.DEBUG) {
           console.log(`[AI Agent] Ended call session ${session.callSessionId}`);
         }
-        // Final summary (fire-and-forget; endSession is already called non-blocking from websocket cleanup)
-        this.generateAndPersistSummary(wsSessionId, 'final').catch((err) => {
-          if (TranscriptAnalyzerAgent.DEBUG) console.warn('[AI Agent] Final summary failed:', err?.message || err);
-        });
+        // Final summary (IMPORTANT: await to avoid session deletion race)
+        try {
+          await this.generateAndPersistSummary(wsSessionId, 'final');
+        } catch (err: any) {
+          console.warn('[AI Agent] Final summary failed:', err?.message || err);
+        }
       } else if (!endSession) {
         // Progressive summary (throttled)
-        this.maybeGenerateProgressiveSummary(wsSessionId).catch(() => {});
+        this.maybeGenerateProgressiveSummary(wsSessionId).catch((err: any) => {
+          if (TranscriptAnalyzerAgent.DEBUG) console.warn('[AI Agent] Progressive summary failed:', err?.message || err);
+        });
       }
     } catch (error) {
       // Re-queue for retry
