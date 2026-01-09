@@ -255,8 +255,11 @@ export class GPTConversationAnalyzer {
   private lastAnalysisResult: AnalysisResult | null = null;
   // Performance: cap memory + prompt size so the app doesn't slow down over long sessions
   private static readonly MAX_HISTORY_LINES_STORED = 250; // hard cap in memory
-  private static readonly MAX_WINDOW_LINES_FOR_AI = 80; // rolling window used for AI analysis
-  private static readonly MAX_WINDOW_CHARS_FOR_AI = 8000; // rolling window used for AI analysis
+  // Speed-first prompt windows
+  private static readonly MAX_WINDOW_LINES_FOR_AI = 50; // main analysis context (recent lines)
+  private static readonly MAX_WINDOW_CHARS_FOR_AI = 5000; // main analysis context (recent chars)
+  private static readonly MAX_WINDOW_LINES_FOR_SCRIPTS = 25; // script context (recent lines)
+  private static readonly MAX_WINDOW_CHARS_FOR_SCRIPTS = 2000; // script context (recent chars)
   private static readonly MAX_SCRIPT_CACHE_ITEMS = 120; // prevent unbounded cache growth
   private static readonly DEBUG = process.env.DEBUG_LOGS === '1';
 
@@ -296,12 +299,25 @@ export class GPTConversationAnalyzer {
     return t;
   }
 
+  // Scripts only need a smaller, recent window (speed-first)
+  private getWindowedTranscriptForScripts(): string {
+    const lines = this.conversationHistory.slice(-GPTConversationAnalyzer.MAX_WINDOW_LINES_FOR_SCRIPTS);
+    let t = lines.join('\n');
+    if (t.length > GPTConversationAnalyzer.MAX_WINDOW_CHARS_FOR_SCRIPTS) {
+      t = t.slice(-GPTConversationAnalyzer.MAX_WINDOW_CHARS_FOR_SCRIPTS);
+      const idx = t.indexOf('\n');
+      if (idx > 0 && idx < 200) t = t.slice(idx + 1);
+    }
+    return t;
+  }
+
   clearHistory() {
     this.conversationHistory = [];
   }
 
   async analyze(): Promise<AnalysisResult> {
     const transcript = this.getWindowedTranscriptForAI();
+    const scriptsTranscript = this.getWindowedTranscriptForScripts();
     
     if (!transcript || transcript.trim().length === 0) {
       return this.getDefaultResult();
@@ -322,7 +338,7 @@ export class GPTConversationAnalyzer {
       
       // Model 3: Generate scripts AFTER objections are detected (5 per objection)
       const scripts = objections.length > 0 
-        ? await this.analyzeModel3_Scripts(transcript, objections)
+        ? await this.analyzeModel3_Scripts(scriptsTranscript, objections)
         : {};
       
       if (GPTConversationAnalyzer.DEBUG) console.log(`[6-MODEL] All models completed in ${Date.now() - startTime}ms`);
@@ -364,6 +380,7 @@ export class GPTConversationAnalyzer {
   // Each model ONLY analyzes what's relevant to its specific task for maximum speed
   async analyzeProgressive(sendPartial: (type: string, data: any) => void, adminSettings?: any): Promise<void> {
     const transcript = this.getWindowedTranscriptForAI();
+    const scriptsTranscript = this.getWindowedTranscriptForScripts();
     
     if (!transcript || transcript.trim().length === 0) {
       return;
@@ -395,7 +412,7 @@ export class GPTConversationAnalyzer {
           if (GPTConversationAnalyzer.DEBUG) console.log(`[MODEL 3 - SCRIPTS] No objections, skipping`);
           return {};
         }
-        return this.analyzeModel3_Scripts(transcript, objections, adminSettings?.customScriptPrompt).then(result => {
+        return this.analyzeModel3_Scripts(scriptsTranscript, objections, adminSettings?.customScriptPrompt).then(result => {
           if (GPTConversationAnalyzer.DEBUG) console.log(`[MODEL 3 - SCRIPTS] ✓ Completed in ${Date.now() - startTime}ms, ${Object.keys(result).length} scripts`);
           sendPartial('analysis_scripts', { objectionScripts: result });
           return result;
