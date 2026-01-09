@@ -1,4 +1,4 @@
-import { WebSocket as WS, OPEN, type Data } from 'ws';
+import { WebSocket as WS, type Data } from 'ws';
 
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || '';
 const ELEVENLABS_MODEL_ID = process.env.ELEVENLABS_MODEL_ID || 'scribe_v2_realtime';
@@ -165,7 +165,7 @@ export class ElevenLabsScribeRealtime {
       }
     }
 
-    if (!this.ws || this.ws.readyState !== OPEN) {
+    if (!this.ws || this.ws.readyState !== 1) { // 1 = OPEN
       console.log('[ElevenLabs] WS not open after connect', { wsState: this.ws?.readyState, closed: this.closed });
       return '';
     }
