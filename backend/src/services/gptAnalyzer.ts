@@ -7,6 +7,7 @@ import { getObjectionDetector } from './objectionDetector.js';
 import { getPsychologicalDialsAnalyzer } from './psychologicalDialsAnalyzer.js';
 import { getRedFlagsDetector } from './redFlagsDetector.js';
 import type { AnalysisResult } from '../types/analysis.js';
+import { withOpenAIPool } from './openaiPool.js';
 
 // Enhanced prompt - GPT scores indicators AND detects objections/psychological patterns
 const SYSTEM_PROMPT = `You are an expert sales conversation analyzer. Analyze conversation text and:
@@ -467,7 +468,7 @@ export class GPTConversationAnalyzer {
   // ============================================================
   private async analyzeModel1_PsychologicalDials(transcript: string): Promise<any[]> {
     try {
-      const response = await this.openai.chat.completions.create({
+      const response = await withOpenAIPool('main', () => this.openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [
           {
@@ -559,7 +560,7 @@ Remember: Score all 27 indicators, then return only the TOP 5 highest-scoring on
         temperature: 0.4,
         max_tokens: 600,
         response_format: { type: 'json_object' }
-      });
+      }));
 
       const content = response.choices[0]?.message?.content;
       if (!content) return [];
@@ -581,7 +582,7 @@ Remember: Score all 27 indicators, then return only the TOP 5 highest-scoring on
   // ============================================================
   private async analyzeModel2_Objections(transcript: string): Promise<any[]> {
     try {
-      const response = await this.openai.chat.completions.create({
+      const response = await withOpenAIPool('main', () => this.openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [
           {
@@ -616,7 +617,7 @@ Return empty array if NO objections found: {"objections": []}`
         temperature: 0.3,
         max_tokens: 800,
         response_format: { type: 'json_object' }
-      });
+      }));
 
       const content = response.choices[0]?.message?.content;
       if (!content) {
@@ -732,7 +733,7 @@ Return empty array if NO objections found: {"objections": []}`
   private async scorePillar1(transcript: string): Promise<any[]> {
     const t = Date.now();
     try {
-      const response = await this.openai.chat.completions.create({
+      const response = await withOpenAIPool('main', () => this.openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: `Score 4 indicators (1-10). Return JSON: {"i":[{"id":1,"s":N},{"id":2,"s":N},{"id":3,"s":N},{"id":4,"s":N}]}
@@ -740,7 +741,7 @@ Return empty array if NO objections found: {"objections": []}`
           { role: 'user', content: transcript }
         ],
         temperature: 0.1, max_tokens: 80, response_format: { type: 'json_object' }
-      });
+      }));
       const r = JSON.parse(response.choices[0]?.message?.content || '{}');
       console.log(`[P1] ${Date.now()-t}ms`);
       return (r.i || r.indicators || []).map((x: any) => ({ id: x.id, name: ['','Pain Awareness','Desire Clarity','Desire Priority','Duration'][x.id], score: x.s || x.score || 5, pillarId: 'P1' }));
@@ -750,7 +751,7 @@ Return empty array if NO objections found: {"objections": []}`
   private async scorePillar2(transcript: string): Promise<any[]> {
     const t = Date.now();
     try {
-      const response = await this.openai.chat.completions.create({
+      const response = await withOpenAIPool('main', () => this.openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: `Score 4 indicators (1-10). Return JSON: {"i":[{"id":5,"s":N},{"id":6,"s":N},{"id":7,"s":N},{"id":8,"s":N}]}
@@ -758,7 +759,7 @@ Return empty array if NO objections found: {"objections": []}`
           { role: 'user', content: transcript }
         ],
         temperature: 0.1, max_tokens: 80, response_format: { type: 'json_object' }
-      });
+      }));
       const r = JSON.parse(response.choices[0]?.message?.content || '{}');
       console.log(`[P2] ${Date.now()-t}ms`);
       return (r.i || r.indicators || []).map((x: any) => ({ id: x.id, name: ['','','','','','Time Pressure','Cost of Delay','Internal Timing','Availability'][x.id], score: x.s || x.score || 5, pillarId: 'P2' }));
@@ -768,7 +769,7 @@ Return empty array if NO objections found: {"objections": []}`
   private async scorePillar3(transcript: string): Promise<any[]> {
     const t = Date.now();
     try {
-      const response = await this.openai.chat.completions.create({
+      const response = await withOpenAIPool('main', () => this.openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: `Score 4 indicators (1-10). Return JSON: {"i":[{"id":9,"s":N},{"id":10,"s":N},{"id":11,"s":N},{"id":12,"s":N}]}
@@ -776,7 +777,7 @@ Return empty array if NO objections found: {"objections": []}`
           { role: 'user', content: transcript }
         ],
         temperature: 0.1, max_tokens: 80, response_format: { type: 'json_object' }
-      });
+      }));
       const r = JSON.parse(response.choices[0]?.message?.content || '{}');
       console.log(`[P3] ${Date.now()-t}ms`);
       return (r.i || r.indicators || []).map((x: any) => ({ id: x.id, name: ['','','','','','','','','','Decision Authority','Decision Style','Commitment','Self-Permission'][x.id], score: x.s || x.score || 5, pillarId: 'P3' }));
@@ -786,7 +787,7 @@ Return empty array if NO objections found: {"objections": []}`
   private async scorePillar4(transcript: string): Promise<any[]> {
     const t = Date.now();
     try {
-      const response = await this.openai.chat.completions.create({
+      const response = await withOpenAIPool('main', () => this.openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: `Score 4 indicators (1-10). Return JSON: {"i":[{"id":13,"s":N},{"id":14,"s":N},{"id":15,"s":N},{"id":16,"s":N}]}
@@ -794,7 +795,7 @@ Return empty array if NO objections found: {"objections": []}`
           { role: 'user', content: transcript }
         ],
         temperature: 0.1, max_tokens: 80, response_format: { type: 'json_object' }
-      });
+      }));
       const r = JSON.parse(response.choices[0]?.message?.content || '{}');
       console.log(`[P4] ${Date.now()-t}ms`);
       return (r.i || r.indicators || []).map((x: any) => ({ id: x.id, name: ['','','','','','','','','','','','','','Resource Access','Resource Fluidity','Investment Mindset','Resourcefulness'][x.id], score: x.s || x.score || 5, pillarId: 'P4' }));
@@ -804,7 +805,7 @@ Return empty array if NO objections found: {"objections": []}`
   private async scorePillar5(transcript: string): Promise<any[]> {
     const t = Date.now();
     try {
-      const response = await this.openai.chat.completions.create({
+      const response = await withOpenAIPool('main', () => this.openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: `Score 4 indicators (1-10). Return JSON: {"i":[{"id":17,"s":N},{"id":18,"s":N},{"id":19,"s":N},{"id":20,"s":N}]}
@@ -812,7 +813,7 @@ Return empty array if NO objections found: {"objections": []}`
           { role: 'user', content: transcript }
         ],
         temperature: 0.1, max_tokens: 80, response_format: { type: 'json_object' }
-      });
+      }));
       const r = JSON.parse(response.choices[0]?.message?.content || '{}');
       console.log(`[P5] ${Date.now()-t}ms`);
       return (r.i || r.indicators || []).map((x: any) => ({ id: x.id, name: ['','','','','','','','','','','','','','','','','','Problem Recognition','Solution Ownership','Locus of Control','Integrity'][x.id], score: x.s || x.score || 5, pillarId: 'P5' }));
@@ -822,7 +823,7 @@ Return empty array if NO objections found: {"objections": []}`
   private async scorePillar6(transcript: string): Promise<any[]> {
     const t = Date.now();
     try {
-      const response = await this.openai.chat.completions.create({
+      const response = await withOpenAIPool('main', () => this.openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: `Score 3 price sensitivity indicators (1-10, high=more sensitive). Return JSON: {"i":[{"id":21,"s":N},{"id":22,"s":N},{"id":23,"s":N}]}
@@ -830,7 +831,7 @@ Return empty array if NO objections found: {"objections": []}`
           { role: 'user', content: transcript }
         ],
         temperature: 0.1, max_tokens: 60, response_format: { type: 'json_object' }
-      });
+      }));
       const r = JSON.parse(response.choices[0]?.message?.content || '{}');
       console.log(`[P6] ${Date.now()-t}ms`);
       return (r.i || r.indicators || []).map((x: any) => ({ id: x.id, name: ['','','','','','','','','','','','','','','','','','','','','','Emotional Spending','Negotiation Reflex','Structural Rigidity'][x.id], score: x.s || x.score || 5, pillarId: 'P6' }));
@@ -840,7 +841,7 @@ Return empty array if NO objections found: {"objections": []}`
   private async scorePillar7(transcript: string): Promise<any[]> {
     const t = Date.now();
     try {
-      const response = await this.openai.chat.completions.create({
+      const response = await withOpenAIPool('main', () => this.openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: `Score 4 trust indicators (1-10). Return JSON: {"i":[{"id":24,"s":N},{"id":25,"s":N},{"id":26,"s":N},{"id":27,"s":N}]}
@@ -848,7 +849,7 @@ Return empty array if NO objections found: {"objections": []}`
           { role: 'user', content: transcript }
         ],
         temperature: 0.1, max_tokens: 80, response_format: { type: 'json_object' }
-      });
+      }));
       const r = JSON.parse(response.choices[0]?.message?.content || '{}');
       console.log(`[P7] ${Date.now()-t}ms`);
       return (r.i || r.indicators || []).map((x: any) => ({ id: x.id, name: ['','','','','','','','','','','','','','','','','','','','','','','','','External Trust','Internal Trust','Risk Tolerance','ROI Ownership'][x.id], score: x.s || x.score || 5, pillarId: 'P7' }));
@@ -983,7 +984,7 @@ Return empty array if NO objections found: {"objections": []}`
   // ============================================================
   private async analyzeModel5_TruthIndex(transcript: string): Promise<any> {
     try {
-      const response = await this.openai.chat.completions.create({
+      const response = await withOpenAIPool('main', () => this.openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [
           {
@@ -1047,7 +1048,7 @@ RETURN JSON:
         temperature: 0.3,
         max_tokens: 700,
         response_format: { type: 'json_object' }
-      });
+      }));
 
       const content = response.choices[0]?.message?.content;
       if (!content) return { score: 70, penalties: [], explanation: 'No analysis' };
@@ -1076,7 +1077,7 @@ RETURN JSON:
   // ============================================================
   private async analyzeModel6_RedFlags(transcript: string): Promise<any[]> {
     try {
-      const response = await this.openai.chat.completions.create({
+      const response = await withOpenAIPool('main', () => this.openai.chat.completions.create({
         model: 'gpt-4o-mini',
         messages: [
           {
@@ -1133,7 +1134,7 @@ Return empty array if NO red flags: {"redFlags": []}`
         temperature: 0.2,
         max_tokens: 400,
         response_format: { type: 'json_object' }
-      });
+      }));
 
       const content = response.choices[0]?.message?.content;
       if (!content) return [];
@@ -1202,7 +1203,7 @@ Return empty array if NO red flags: {"redFlags": []}`
       : '';
 
     try {
-      const response = await this.openai.chat.completions.create({
+      const response = await withOpenAIPool('main', () => this.openai.chat.completions.create({
         model: 'gpt-4o',
         messages: [
           {
@@ -1263,7 +1264,7 @@ CRITICAL:
         temperature: 0.3,
         max_tokens: 2000,
         response_format: { type: 'json_object' }
-      });
+      }));
 
       const content = response.choices[0]?.message?.content;
       if (!content) {
@@ -1403,7 +1404,7 @@ Return ONLY a JSON object with objectionScripts field:
   }
 }`;
 
-      const response = await this.openai.chat.completions.create({
+      const response = await withOpenAIPool('main', () => this.openai.chat.completions.create({
         model: 'gpt-4o',
         messages: [
           {
@@ -1418,7 +1419,7 @@ Return ONLY a JSON object with objectionScripts field:
         temperature: 0.3,
         max_tokens: 6000, // More tokens for script generation
         response_format: { type: 'json_object' }
-      });
+      }));
 
       const content = response.choices[0]?.message?.content;
       if (!content) {

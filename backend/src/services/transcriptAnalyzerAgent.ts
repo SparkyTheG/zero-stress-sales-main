@@ -7,6 +7,7 @@ import {
   insertCallSessionSummary,
   type TranscriptChunkRow,
 } from './supabaseTranscriptStore.js';
+import { withOpenAIPool } from './openaiPool.js';
 import { randomUUID } from 'crypto';
 
 // Context about the app for the AI agent
@@ -230,21 +231,23 @@ export class TranscriptAnalyzerAgent {
       }
 
       // Use GPT to analyze
-      const response = await this.openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        temperature: 0.1,
-        max_tokens: 10,
-        messages: [
-          {
-            role: 'system',
-            content: APP_CONTEXT + '\n\n' + SPEAKER_DETECTION_PROMPT,
-          },
-          {
-            role: 'user',
-            content: `CONVERSATION SO FAR:\n${session.conversationHistory.slice(-TranscriptAnalyzerAgent.SPEAKER_CONTEXT_CHARS)}\n\n---\nNEW TEXT TO CLASSIFY:\n"${newText}"\n\nWho said this? Reply with only "closer" or "prospect":`,
-          },
-        ],
-      });
+      const response = await withOpenAIPool('aux', () =>
+        this.openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          temperature: 0.1,
+          max_tokens: 10,
+          messages: [
+            {
+              role: 'system',
+              content: APP_CONTEXT + '\n\n' + SPEAKER_DETECTION_PROMPT,
+            },
+            {
+              role: 'user',
+              content: `CONVERSATION SO FAR:\n${session.conversationHistory.slice(-TranscriptAnalyzerAgent.SPEAKER_CONTEXT_CHARS)}\n\n---\nNEW TEXT TO CLASSIFY:\n"${newText}"\n\nWho said this? Reply with only "closer" or "prospect":`,
+            },
+          ],
+        })
+      );
 
       const result = response.choices[0]?.message?.content?.trim().toLowerCase() || '';
       
@@ -426,23 +429,25 @@ export class TranscriptAnalyzerAgent {
     const compactNotes: any[] = [];
 
     for (const part of parts) {
-      const res = await this.openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        temperature: 0.2,
-        max_tokens: 700,
-        messages: [
-          { role: 'system', content: SUMMARY_SYSTEM },
-          {
-            role: 'user',
-            content:
-              `Summarize this PART of the sales call transcript into compact notes.\n` +
-              `Status: ${status}\n\n` +
-              `Return JSON with EXACT keys:\n` +
-              `{"notes":[...],"objectionsRaised":[...],"objectionsResolved":[...],"decisions":[...],"nextSteps":[...],"signals":{"pain":0,"urgency":0,"trust":0,"budget":0,"decision":0}}\n\n` +
-              `TRANSCRIPT PART:\n${part}`,
-          },
-        ],
-      });
+      const res = await withOpenAIPool('aux', () =>
+        this.openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          temperature: 0.2,
+          max_tokens: 700,
+          messages: [
+            { role: 'system', content: SUMMARY_SYSTEM },
+            {
+              role: 'user',
+              content:
+                `Summarize this PART of the sales call transcript into compact notes.\n` +
+                `Status: ${status}\n\n` +
+                `Return JSON with EXACT keys:\n` +
+                `{"notes":[...],"objectionsRaised":[...],"objectionsResolved":[...],"decisions":[...],"nextSteps":[...],"signals":{"pain":0,"urgency":0,"trust":0,"budget":0,"decision":0}}\n\n` +
+                `TRANSCRIPT PART:\n${part}`,
+            },
+          ],
+        })
+      );
 
       const txt = res.choices[0]?.message?.content?.trim() || '';
       try {
@@ -458,34 +463,36 @@ export class TranscriptAnalyzerAgent {
   }
 
   private async buildFinalSummaryFromNotes(notesJson: string, status: 'progressive' | 'final'): Promise<any> {
-    const res = await this.openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      temperature: 0.2,
-      max_tokens: 1100,
-      messages: [
-        { role: 'system', content: SUMMARY_SYSTEM },
-        {
-          role: 'user',
-          content:
-            `Using the notes extracted from the FULL call, produce the final structured summary.\n` +
-            `Status: ${status}\n\n` +
-            `Output JSON with EXACT keys:\n` +
-            `{\n` +
-            `  "title": "short topic (1-3 words)",\n` +
-            `  "executiveSummary": "2-3 sentences",\n` +
-            `  "prospectSituation": "1 paragraph",\n` +
-            `  "keyPoints": ["..."],\n` +
-            `  "objectionsRaised": ["..."],\n` +
-            `  "objectionsResolved": ["..."],\n` +
-            `  "nextSteps": ["..."],\n` +
-            `  "closerPerformance": "1 paragraph",\n` +
-            `  "prospectReadiness": "not_ready|unsure|ready",\n` +
-            `  "recommendations": "1 paragraph"\n` +
-            `}\n\n` +
-            `NOTES JSON:\n${notesJson}`,
-        },
-      ],
-    });
+    const res = await withOpenAIPool('aux', () =>
+      this.openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        temperature: 0.2,
+        max_tokens: 1100,
+        messages: [
+          { role: 'system', content: SUMMARY_SYSTEM },
+          {
+            role: 'user',
+            content:
+              `Using the notes extracted from the FULL call, produce the final structured summary.\n` +
+              `Status: ${status}\n\n` +
+              `Output JSON with EXACT keys:\n` +
+              `{\n` +
+              `  "title": "short topic (1-3 words)",\n` +
+              `  "executiveSummary": "2-3 sentences",\n` +
+              `  "prospectSituation": "1 paragraph",\n` +
+              `  "keyPoints": ["..."],\n` +
+              `  "objectionsRaised": ["..."],\n` +
+              `  "objectionsResolved": ["..."],\n` +
+              `  "nextSteps": ["..."],\n` +
+              `  "closerPerformance": "1 paragraph",\n` +
+              `  "prospectReadiness": "not_ready|unsure|ready",\n` +
+              `  "recommendations": "1 paragraph"\n` +
+              `}\n\n` +
+              `NOTES JSON:\n${notesJson}`,
+          },
+        ],
+      })
+    );
 
     const txt = res.choices[0]?.message?.content?.trim() || '';
     try {
