@@ -1204,7 +1204,7 @@ Return empty array if NO red flags: {"redFlags": []}`
 
     try {
       const response = await withOpenAIPool('main', () => this.openai.chat.completions.create({
-        model: 'gpt-4o',
+        model: 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
@@ -1405,7 +1405,7 @@ Return ONLY a JSON object with objectionScripts field:
 }`;
 
       const response = await withOpenAIPool('main', () => this.openai.chat.completions.create({
-        model: 'gpt-4o',
+        model: 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
