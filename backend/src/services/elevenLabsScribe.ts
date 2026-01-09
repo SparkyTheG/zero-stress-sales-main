@@ -313,8 +313,6 @@ export async function createRealtimeConnection(options: RealtimeConnectionOption
   });
 
   try {
-    await scribe.connect();
-
     const connection = {
       sendAudio: async (audioData: Buffer | Uint8Array): Promise<{ text: string; error?: string }> => {
         const chunkNum = ++audioChunkCount;

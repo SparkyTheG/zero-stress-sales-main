@@ -49,7 +49,11 @@ export class ConversationWebSocketServer {
     this.wss = new WebSocketServer({ server });
     
     this.wss.on('connection', (ws: WebSocket) => {
-      this.handleConnection(ws);
+      // IMPORTANT: handleConnection is async; always catch to avoid unhandled rejections crashing the server
+      void this.handleConnection(ws).catch((err) => {
+        console.error('[WS] handleConnection failed:', err);
+        try { ws.close(); } catch {}
+      });
     });
 
     if (ConversationWebSocketServer.DEBUG) console.log(`WebSocket server attached to HTTP server`);
@@ -67,42 +71,15 @@ export class ConversationWebSocketServer {
       currentRunId: 0,
     };
 
-    // Initialize ElevenLabs Scribe connection for audio
-    try {
-      session.elevenLabsConnection = await createRealtimeConnection({
-        onTranscript: async (history: string) => {
-          // Trigger analysis on committed transcripts
-          if (session.transcript.length > 0 || history.length > 0) {
-            this.scheduleAnalysis(session);
-          }
-        },
-        onChunk: (text: string) => {
-          // Send transcript chunk to frontend for display
-          this.sendIfOpen(session.ws, {
-            type: 'transcript_chunk',
-            text,
-          });
-        },
-        onError: (error: Error) => {
-          console.error('[ElevenLabs] Error:', error);
-          this.sendIfOpen(session.ws, {
-            type: 'error',
-            error: error.message,
-          });
-        },
-      });
-      if (ConversationWebSocketServer.DEBUG) console.log(`[${sessionId}] ElevenLabs connection initialized`);
-    } catch (error) {
-      console.error('[ElevenLabs] Failed to initialize:', error);
-    }
-
     this.sessions.set(sessionId, session);
 
     ws.on('message', (data: Buffer) => {
       try {
         const message = JSON.parse(data.toString());
         // NON-BLOCKING: don't await - let message handling continue immediately
-        this.handleMessage(session, message);
+        void this.handleMessage(session, message).catch((err) => {
+          console.error(`[${session.sessionId}] handleMessage failed:`, err);
+        });
       } catch (error) {
         console.error('Error handling message:', error);
         ws.send(JSON.stringify({ type: 'error', error: 'Invalid message format' }));
@@ -127,7 +104,7 @@ export class ConversationWebSocketServer {
     if (ConversationWebSocketServer.DEBUG) console.log(`New session connected: ${sessionId}`);
   }
 
-  private handleMessage(session: ClientSession, message: any) {
+  private async handleMessage(session: ClientSession, message: any) {
     switch (message.type) {
       case 'auth':
         // Authenticate this websocket for Supabase transcript persistence
@@ -139,16 +116,46 @@ export class ConversationWebSocketServer {
         break;
 
       case 'audio':
-        // Handle audio data from ElevenLabs Scribe
-        if (message.data && session.elevenLabsConnection) {
-          // Convert base64 audio data to Buffer
-          const audioBuffer = Buffer.from(message.data, 'base64');
-          if (ConversationWebSocketServer.DEBUG) console.log(`[${session.sessionId}] Audio data received, bytes:`, audioBuffer.length);
-          
-          // Send audio to ElevenLabs Scribe (non-blocking)
-          session.elevenLabsConnection.sendAudio(audioBuffer).catch((err: Error) => {
-            console.error(`[${session.sessionId}] Audio processing error:`, err);
-          });
+        // Handle audio data from ElevenLabs Scribe (lazy-init on first audio)
+        if (message.data) {
+          try {
+            if (!session.elevenLabsConnection) {
+              session.elevenLabsConnection = await createRealtimeConnection({
+                onTranscript: async (history: string) => {
+                  // Trigger analysis on committed transcripts (non-blocking)
+                  if (history && history.length > 0) this.scheduleAnalysis(session);
+                },
+                onChunk: (text: string) => {
+                  // NOTE: today we don't push raw transcript text to frontend UI, but we DO analyze it.
+                  // Feed the analyzer + persistence pipeline the same way as 'transcript' messages do.
+                  const speaker = 'prospect';
+                  const timestamp = Date.now();
+                  session.transcript.push({ text, speaker, timestamp });
+                  if (session.transcript.length > ConversationWebSocketServer.MAX_SESSION_CHUNKS) {
+                    session.transcript.splice(0, session.transcript.length - ConversationWebSocketServer.MAX_SESSION_CHUNKS);
+                  }
+                  session.gptAnalyzer.addTranscript(text, speaker);
+                  if (session.authUserId) {
+                    this.transcriptAgent.analyzeAndPersist(session.sessionId, text, speaker).catch(() => {});
+                  }
+                },
+                onError: (error: Error) => {
+                  console.error('[ElevenLabs] Error:', error);
+                  this.sendIfOpen(session.ws, { type: 'error', error: error.message });
+                },
+              });
+              if (ConversationWebSocketServer.DEBUG) console.log(`[${session.sessionId}] ElevenLabs connection ready (lazy init)`);
+            }
+
+            // Convert base64 audio data to Buffer and send to Scribe
+            const audioBuffer = Buffer.from(message.data, 'base64');
+            if (ConversationWebSocketServer.DEBUG) console.log(`[${session.sessionId}] Audio data received, bytes:`, audioBuffer.length);
+            session.elevenLabsConnection.sendAudio(audioBuffer).catch((err: Error) => {
+              console.error(`[${session.sessionId}] Audio processing error:`, err);
+            });
+          } catch (err) {
+            console.error(`[${session.sessionId}] Failed to init/send ElevenLabs audio:`, err);
+          }
         }
         break;
 
