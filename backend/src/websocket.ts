@@ -4,6 +4,7 @@ import type { AnalysisResult, TranscriptChunk } from './types/analysis.js';
 import { GPTConversationAnalyzer } from './services/gptAnalyzer.js';
 import { verifySupabaseAccessToken } from './services/supabaseTranscriptStore.js';
 import { getTranscriptAnalyzerAgent, TranscriptAnalyzerAgent } from './services/transcriptAnalyzerAgent.js';
+import { createRealtimeConnection } from './services/elevenLabsScribe.js';
 
 interface AdminSettings {
   pillarWeights?: { id: string; weight: number }[];
@@ -29,6 +30,9 @@ interface ClientSession {
   // Auth info (for AI agent transcript persistence)
   authUserId?: string;
   authEmail?: string;
+
+  // ElevenLabs Scribe realtime connection
+  elevenLabsConnection?: any;
 }
 
 export class ConversationWebSocketServer {
@@ -51,7 +55,7 @@ export class ConversationWebSocketServer {
     if (ConversationWebSocketServer.DEBUG) console.log(`WebSocket server attached to HTTP server`);
   }
 
-  private handleConnection(ws: WebSocket) {
+  private async handleConnection(ws: WebSocket) {
     const sessionId = this.generateSessionId();
     const session: ClientSession = {
       ws,
@@ -62,6 +66,35 @@ export class ConversationWebSocketServer {
       pendingAnalysis: false,
       currentRunId: 0,
     };
+
+    // Initialize ElevenLabs Scribe connection for audio
+    try {
+      session.elevenLabsConnection = await createRealtimeConnection({
+        onTranscript: async (history: string) => {
+          // Trigger analysis on committed transcripts
+          if (session.transcript.length > 0 || history.length > 0) {
+            this.scheduleAnalysis(session);
+          }
+        },
+        onChunk: (text: string) => {
+          // Send transcript chunk to frontend for display
+          this.sendIfOpen(session.ws, {
+            type: 'transcript_chunk',
+            text,
+          });
+        },
+        onError: (error: Error) => {
+          console.error('[ElevenLabs] Error:', error);
+          this.sendIfOpen(session.ws, {
+            type: 'error',
+            error: error.message,
+          });
+        },
+      });
+      if (ConversationWebSocketServer.DEBUG) console.log(`[${sessionId}] ElevenLabs connection initialized`);
+    } catch (error) {
+      console.error('[ElevenLabs] Failed to initialize:', error);
+    }
 
     this.sessions.set(sessionId, session);
 
@@ -106,9 +139,16 @@ export class ConversationWebSocketServer {
         break;
 
       case 'audio':
-        // Handle audio data (future enhancement for direct audio processing)
-        if (message.data) {
-          if (ConversationWebSocketServer.DEBUG) console.log('Audio data received, length:', message.data.length);
+        // Handle audio data from ElevenLabs Scribe
+        if (message.data && session.elevenLabsConnection) {
+          // Convert base64 audio data to Buffer
+          const audioBuffer = Buffer.from(message.data, 'base64');
+          if (ConversationWebSocketServer.DEBUG) console.log(`[${session.sessionId}] Audio data received, bytes:`, audioBuffer.length);
+          
+          // Send audio to ElevenLabs Scribe (non-blocking)
+          session.elevenLabsConnection.sendAudio(audioBuffer).catch((err: Error) => {
+            console.error(`[${session.sessionId}] Audio processing error:`, err);
+          });
         }
         break;
 
@@ -260,6 +300,16 @@ export class ConversationWebSocketServer {
   private cleanupSession(sessionId: string) {
     const session = this.sessions.get(sessionId);
     if (session) {
+      // Close ElevenLabs connection
+      if (session.elevenLabsConnection) {
+        try {
+          session.elevenLabsConnection.close();
+          if (ConversationWebSocketServer.DEBUG) console.log(`[${sessionId}] ElevenLabs connection closed`);
+        } catch (error) {
+          console.error(`[${sessionId}] Error closing ElevenLabs connection:`, error);
+        }
+      }
+
       if (session.analysisInterval) {
         clearInterval(session.analysisInterval);
       }
