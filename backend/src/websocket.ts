@@ -161,7 +161,7 @@ export class ConversationWebSocketServer {
           const now = Date.now();
           const timeSinceLastAnalysis = now - (session.lastAnalysisTime || 0);
           
-          if (isFinal && timeSinceLastAnalysis > 800) {
+          if (isFinal && timeSinceLastAnalysis > 300) {
             // Schedule analysis (non-blocking)
             if (ConversationWebSocketServer.DEBUG) console.log(`[${session.sessionId}] Scheduling analysis (time since last: ${timeSinceLastAnalysis}ms)`);
             this.scheduleAnalysis(session);
