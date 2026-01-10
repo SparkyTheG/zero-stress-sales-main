@@ -1,4 +1,5 @@
 import { Shield, TrendingUp, TrendingDown } from 'lucide-react';
+import AnimatedNumber from './AnimatedNumber';
 
 interface TruthIndexProps {
   score: number;
@@ -59,7 +60,7 @@ export default function TruthIndex({ score }: TruthIndexProps) {
 
       <div className="text-center mb-6">
         <div className={`text-6xl font-bold bg-gradient-to-r ${getColorClass()} bg-clip-text text-transparent mb-2 transition-all duration-500`}>
-          {score}%
+          <AnimatedNumber value={score} suffix="%" />
         </div>
         <div className="flex items-center justify-center gap-2 mb-2">
           {score > 0 && getIcon()}
@@ -67,7 +68,7 @@ export default function TruthIndex({ score }: TruthIndexProps) {
         </div>
         <div className="w-full bg-gray-800/50 rounded-full h-4 overflow-hidden mb-4">
           <div
-            className={`h-full bg-gradient-to-r ${getColorClass()} transition-all duration-700 ease-out`}
+            className={`h-full bg-gradient-to-r ${getColorClass()} transition-[width] duration-700 ease-out`}
             style={{ width: `${score}%` }}
           ></div>
         </div>

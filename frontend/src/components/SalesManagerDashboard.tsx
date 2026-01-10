@@ -1,5 +1,6 @@
 import { TrendingUp, TrendingDown, Minus, AlertTriangle, Phone, DollarSign, Target, Clock, Activity, Award, AlertCircle, ShieldAlert, ArrowLeft } from 'lucide-react';
 import { SalesManagerProfile, CloserOverview } from '../types';
+import AnimatedNumber from './AnimatedNumber';
 
 interface SalesManagerDashboardProps {
   profile: SalesManagerProfile;
@@ -105,13 +106,13 @@ export default function SalesManagerDashboard({ profile, onCloserClick, onBack }
                 <p className="text-gray-400 text-lg mb-3">Sales Manager - {profile.company}</p>
                 <div className="flex items-center gap-4">
                   <div className="px-4 py-2 bg-teal-500/10 border border-teal-400/30 rounded-lg">
-                    <span className="text-teal-400 font-bold text-lg">{profile.teamSize}</span>
+                    <span className="text-teal-400 font-bold text-lg"><AnimatedNumber value={profile.teamSize} /></span>
                     <span className="text-gray-400 text-sm ml-2">Closers</span>
                   </div>
                   {totalAlerts > 0 && (
                     <div className="px-4 py-2 bg-red-500/10 border border-red-400/30 rounded-lg flex items-center gap-2">
                       <AlertTriangle className="w-5 h-5 text-red-400" />
-                      <span className="text-red-400 font-bold text-lg">{totalAlerts}</span>
+                      <span className="text-red-400 font-bold text-lg"><AnimatedNumber value={totalAlerts} /></span>
                       <span className="text-gray-400 text-sm">Critical Alerts</span>
                     </div>
                   )}
@@ -220,21 +221,21 @@ export default function SalesManagerDashboard({ profile, onCloserClick, onBack }
                       <Phone className="w-4 h-4 text-cyan-400" />
                       <span className="text-xs text-gray-400">Close Rate</span>
                     </div>
-                    <div className="text-2xl font-bold text-white">{closer.metrics.closeRate}%</div>
+                    <div className="text-2xl font-bold text-white"><AnimatedNumber value={closer.metrics.closeRate} suffix="%" /></div>
                   </div>
                   <div className="p-3 bg-gray-800/40 rounded-lg">
                     <div className="flex items-center gap-2 mb-2">
                       <DollarSign className="w-4 h-4 text-emerald-400" />
                       <span className="text-xs text-gray-400">Avg Deal</span>
                     </div>
-                    <div className="text-lg font-bold text-white">${(closer.metrics.avgDealValue / 1000).toFixed(1)}k</div>
+                    <div className="text-lg font-bold text-white"><AnimatedNumber value={closer.metrics.avgDealValue / 1000} prefix="$" suffix="k" decimals={1} /></div>
                   </div>
                   <div className="p-3 bg-gray-800/40 rounded-lg">
                     <div className="flex items-center gap-2 mb-2">
                       <Target className="w-4 h-4 text-blue-400" />
                       <span className="text-xs text-gray-400">This Month</span>
                     </div>
-                    <div className="text-lg font-bold text-white">{closer.metrics.callsThisMonth}</div>
+                    <div className="text-lg font-bold text-white"><AnimatedNumber value={closer.metrics.callsThisMonth} /></div>
                   </div>
                   <div className="p-3 bg-gray-800/40 rounded-lg">
                     <div className="flex items-center gap-2 mb-2">

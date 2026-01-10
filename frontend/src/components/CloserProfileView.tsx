@@ -5,6 +5,7 @@ import CloserInputForm from './CloserInputForm';
 import IntroCallQuestions from './IntroCallQuestions';
 import CallDebrief from './CallDebrief';
 import { supabase } from '../lib/supabase';
+import AnimatedNumber from './AnimatedNumber';
 
 interface CloserProfileViewProps {
   profile: CloserProfile;
@@ -270,11 +271,11 @@ export default function CloserProfileView({ profile: initialProfile, onBack }: C
               <div className="flex gap-4">
                 <div className="px-4 py-2 bg-teal-500/10 border border-teal-400/30 rounded-lg">
                   <div className="text-xs text-gray-400 mb-1">Successful Calls</div>
-                  <div className="text-2xl font-bold text-teal-400">{profile.successCallCount}</div>
+                  <div className="text-2xl font-bold text-teal-400"><AnimatedNumber value={profile.successCallCount} /></div>
                 </div>
                 <div className="px-4 py-2 bg-orange-500/10 border border-orange-400/30 rounded-lg">
                   <div className="text-xs text-gray-400 mb-1">Training Calls</div>
-                  <div className="text-2xl font-bold text-orange-400">{profile.difficultCallCount}</div>
+                  <div className="text-2xl font-bold text-orange-400"><AnimatedNumber value={profile.difficultCallCount} /></div>
                 </div>
               </div>
             </div>

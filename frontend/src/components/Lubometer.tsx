@@ -1,6 +1,7 @@
 import { DollarSign, TrendingUp, Zap } from 'lucide-react';
 import { LubometerTier } from '../types';
 import { useSettings } from '../contexts/SettingsContext';
+import AnimatedNumber from './AnimatedNumber';
 
 interface LubometerProps {
   tiers: LubometerTier[];
@@ -81,7 +82,7 @@ export default function Lubometer({ tiers }: LubometerProps) {
               </div>
               <div className="text-right">
                 <div className={`text-2xl font-bold bg-gradient-to-r ${getReadinessColor(tier.readiness)} bg-clip-text text-transparent transition-all duration-500`}>
-                  {tier.readiness}%
+                  <AnimatedNumber value={tier.readiness} suffix="%" />
                 </div>
                 <div className="text-xs text-gray-400">{getReadinessLabel(tier.readiness)}</div>
               </div>
@@ -89,7 +90,7 @@ export default function Lubometer({ tiers }: LubometerProps) {
 
             <div className="w-full bg-gray-800/50 rounded-full h-3 overflow-hidden">
               <div
-                className={`h-full bg-gradient-to-r ${getReadinessColor(tier.readiness)} transition-all duration-700 ease-out`}
+                className={`h-full bg-gradient-to-r ${getReadinessColor(tier.readiness)} transition-[width] duration-700 ease-out`}
                 style={{ width: `${Math.max(tier.readiness, 2)}%` }}
               ></div>
             </div>

@@ -1,5 +1,6 @@
 import { MessageSquare, Sparkles } from 'lucide-react';
 import { Objection, ScriptStep } from '../types';
+import AnimatedNumber from './AnimatedNumber';
 
 interface WhisperEngineProps {
   objections: Objection[];
@@ -99,12 +100,12 @@ export default function WhisperEngine({
                   <span className="text-white font-medium">{objection.text}</span>
                 </div>
                 <span className={`text-lg font-bold ${getTextColor(probability)}`}>
-                  {probability}%
+                  <AnimatedNumber value={probability} suffix="%" />
                 </span>
               </div>
               <div className="w-full bg-gray-800/50 rounded-full h-2 overflow-hidden">
                 <div
-                  className={`h-full ${getBarColor(probability)} transition-all duration-500`}
+                  className={`h-full ${getBarColor(probability)} transition-[width] duration-600 ease-out`}
                   style={{ width: `${probability}%` }}
                 ></div>
               </div>

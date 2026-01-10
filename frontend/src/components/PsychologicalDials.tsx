@@ -1,5 +1,6 @@
 import { Brain } from 'lucide-react';
 import { PsychologicalDial } from '../types';
+import AnimatedNumber from './AnimatedNumber';
 
 interface PsychologicalDialsProps {
   dials: PsychologicalDial[];
@@ -58,14 +59,14 @@ export default function PsychologicalDials({ dials }: PsychologicalDialsProps) {
                     <span className="text-white font-medium">{dial.name}</span>
                   </div>
                   <span className={`text-xl font-bold bg-gradient-to-r ${color} bg-clip-text text-transparent`}>
-                    {intensity}%
+                    <AnimatedNumber value={intensity} suffix="%" />
                   </span>
                 </div>
 
                 {/* Progress Bar */}
                 <div className="w-full bg-gray-800/50 rounded-full h-3 overflow-hidden">
                   <div
-                    className={`h-full bg-gradient-to-r ${color} transition-all duration-500`}
+                    className={`h-full bg-gradient-to-r ${color} transition-[width] duration-600 ease-out`}
                     style={{ width: `${intensity}%` }}
                   />
                 </div>

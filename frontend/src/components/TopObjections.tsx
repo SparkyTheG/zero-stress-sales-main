@@ -1,5 +1,6 @@
 import { MessageCircle } from 'lucide-react';
 import { Objection } from '../types';
+import AnimatedNumber from './AnimatedNumber';
 
 interface TopObjectionsProps {
   objections: Objection[];
@@ -46,12 +47,12 @@ export default function TopObjections({ objections, highlightedObjection }: TopO
               <div className="flex items-center justify-between mb-2">
                 <span className="text-white font-medium text-sm">{objection.text}</span>
                 <span className={`text-lg font-bold bg-gradient-to-r ${getColorClass(probability)} bg-clip-text text-transparent ml-3`}>
-                  {probability}%
+                  <AnimatedNumber value={probability} suffix="%" />
                 </span>
               </div>
               <div className="w-full bg-gray-800/50 rounded-full h-2 overflow-hidden">
                 <div
-                  className={`h-full bg-gradient-to-r ${getColorClass(probability)} transition-all duration-500`}
+                  className={`h-full bg-gradient-to-r ${getColorClass(probability)} transition-[width] duration-600 ease-out`}
                   style={{ width: `${probability}%` }}
                 ></div>
               </div>
