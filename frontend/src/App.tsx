@@ -219,6 +219,37 @@ function App() {
     }
   };
 
+  const tryExtractTruthIndexScoreFromPartialJson = (raw: string): number | null => {
+    // Works even if the overall JSON isn't complete yet.
+    const m = raw.match(/"score"\s*:\s*([0-9]+(?:\.[0-9]+)?)/);
+    if (!m) return null;
+    const n = Number(m[1]);
+    if (!Number.isFinite(n)) return null;
+    return Math.max(0, Math.min(100, n));
+  };
+
+  const tryExtractPsychologicalDialsFromPartialJson = (raw: string): any[] | null => {
+    // Works even if the overall JSON isn't complete yet.
+    // Extracts complete dial objects seen so far inside the psychologicalDials array.
+    const idx = raw.indexOf('"psychologicalDials"');
+    if (idx < 0) return null;
+    const arrStart = raw.indexOf('[', idx);
+    if (arrStart < 0) return null;
+    const slice = raw.slice(arrStart);
+
+    const out: any[] = [];
+    const re = /\{[^{}]*"name"\s*:\s*"([^"]+)"[^{}]*"intensity"\s*:\s*([0-9]+(?:\.[0-9]+)?)[^{}]*"color"\s*:\s*"([^"]+)"[^{}]*\}/g;
+    let mm: RegExpExecArray | null;
+    while ((mm = re.exec(slice)) && out.length < 5) {
+      out.push({
+        name: mm[1],
+        intensity: Number(mm[2]),
+        color: mm[3],
+      });
+    }
+    return out.length ? out : null;
+  };
+
 
   useEffect(() => {
     try {
@@ -314,11 +345,15 @@ function App() {
           if (scope === 'psychological_dials') {
             const buf = streamBuffersRef.current[scope] || '';
             const parsed = tryParseBalancedJsonObject(buf);
-            if (parsed && Array.isArray(parsed.psychologicalDials) && parsed.psychologicalDials.length > 0) {
-              const hash = JSON.stringify(parsed.psychologicalDials);
+            const dials = (parsed && Array.isArray(parsed.psychologicalDials) && parsed.psychologicalDials.length > 0)
+              ? parsed.psychologicalDials
+              : tryExtractPsychologicalDialsFromPartialJson(buf);
+
+            if (dials && Array.isArray(dials) && dials.length > 0) {
+              const hash = JSON.stringify(dials);
               if (lastParsedStreamHashRef.current[scope] !== hash) {
                 lastParsedStreamHashRef.current[scope] = hash;
-                const cleaned = parsed.psychologicalDials
+                const cleaned = dials
                   .map((d: any) => ({ ...d, name: cleanDialName(d.name) }))
                   .filter((d: any) => d.name);
                 setPsychologicalDials(prev => upsertRollingDials(prev, cleaned, 5));
@@ -330,11 +365,15 @@ function App() {
           if (scope === 'truth_index') {
             const buf = streamBuffersRef.current[scope] || '';
             const parsed = tryParseBalancedJsonObject(buf);
-            if (parsed && (typeof parsed.score === 'number' || typeof parsed.score === 'string')) {
-              const n = Number(parsed.score);
-              if (Number.isFinite(n)) {
-                setTruthIndexScore(Math.max(0, Math.min(100, n)));
-              }
+            const scoreFromBalanced = parsed && (typeof parsed.score === 'number' || typeof parsed.score === 'string')
+              ? Number(parsed.score)
+              : null;
+            const score = (scoreFromBalanced != null && Number.isFinite(scoreFromBalanced))
+              ? Math.max(0, Math.min(100, scoreFromBalanced))
+              : tryExtractTruthIndexScoreFromPartialJson(buf);
+
+            if (typeof score === 'number') {
+              setTruthIndexScore(score);
             }
           }
         }
