@@ -264,6 +264,96 @@ export class GPTConversationAnalyzer {
   private static readonly MAX_SCRIPT_CACHE_ITEMS = 120; // prevent unbounded cache growth
   private static readonly DEBUG = process.env.DEBUG_LOGS === '1';
 
+  // Optional: stream model output deltas to the frontend for perceived speed.
+  // Used ONLY for score-like models (Lubometer pillars, Psych Dials, Truth Index).
+  private static readonly STREAM_DELTA_MIN_CHARS = Number.parseInt(process.env.AI_STREAM_MIN_CHARS || '48', 10) || 48;
+  private static readonly STREAM_DELTA_MIN_INTERVAL_MS = Number.parseInt(process.env.AI_STREAM_MIN_INTERVAL_MS || '60', 10) || 60;
+
+  private makeStreamSink(
+    sendStream: ((scope: string, event: 'start' | 'delta' | 'done', delta?: string) => void) | undefined,
+    scope: string
+  ): ((event: 'start' | 'delta' | 'done', delta?: string) => void) | undefined {
+    if (!sendStream) return undefined;
+    return (event, delta) => {
+      try {
+        sendStream(scope, event, delta);
+      } catch {
+        // never let streaming telemetry break analysis
+      }
+    };
+  }
+
+  private async streamChatCompletionToText(options: {
+    pool: 'main' | 'aux';
+    model: string;
+    messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+    temperature?: number;
+    max_tokens?: number;
+    response_format?: any;
+    streamSink?: (event: 'start' | 'delta' | 'done', delta?: string) => void;
+  }): Promise<string> {
+    const {
+      pool,
+      model,
+      messages,
+      temperature,
+      max_tokens,
+      response_format,
+      streamSink,
+    } = options;
+
+    return await withOpenAIPool(pool, async () => {
+      let out = '';
+      let buf = '';
+      let lastFlush = 0;
+
+      const flush = (force = false) => {
+        if (!streamSink) return;
+        const now = Date.now();
+        if (!buf) return;
+        if (!force) {
+          if (buf.length < GPTConversationAnalyzer.STREAM_DELTA_MIN_CHARS && now - lastFlush < GPTConversationAnalyzer.STREAM_DELTA_MIN_INTERVAL_MS) {
+            return;
+          }
+        }
+        lastFlush = now;
+        const chunk = buf;
+        buf = '';
+        streamSink('delta', chunk);
+      };
+
+      if (streamSink) streamSink('start');
+
+      // OpenAI streaming: receive incremental deltas, then parse final JSON once complete.
+      const stream = await this.openai.chat.completions.create({
+        model,
+        stream: true,
+        messages,
+        temperature,
+        max_tokens,
+        response_format,
+      } as any);
+
+      try {
+        // @ts-ignore - Stream implements async iterator in openai SDK
+        for await (const part of stream as any) {
+          const delta: string = part?.choices?.[0]?.delta?.content || '';
+          if (!delta) continue;
+          out += delta;
+          if (streamSink) {
+            buf += delta;
+            flush(false);
+          }
+        }
+      } finally {
+        flush(true);
+        if (streamSink) streamSink('done');
+      }
+
+      return out;
+    });
+  }
+
   constructor(apiKey: string) {
     this.openai = new OpenAI({ apiKey });
   }
@@ -391,10 +481,14 @@ export class GPTConversationAnalyzer {
       const startTime = Date.now();
       if (GPTConversationAnalyzer.DEBUG) console.log('[6-MODEL PARALLEL] Starting all 6 specialized models simultaneously...');
 
+      const sendStream = (scope: string, event: 'start' | 'delta' | 'done', delta?: string) => {
+        sendPartial('ai_stream', { scope, event, delta });
+      };
+
       // ALL 6 MODELS RUN IN PARALLEL - each has its own specialized prompt
       
       // Model 1: Psychological Dials - ONLY analyzes emotional/psychological patterns
-      const psychologicalDialsPromise = this.analyzeModel1_PsychologicalDials(transcript).then(result => {
+      const psychologicalDialsPromise = this.analyzeModel1_PsychologicalDials(transcript, sendStream).then(result => {
         if (GPTConversationAnalyzer.DEBUG) console.log(`[MODEL 1 - DIALS] ✓ Completed in ${Date.now() - startTime}ms`);
         sendPartial('analysis_partial', { psychologicalDials: result });
         return result;
@@ -421,7 +515,7 @@ export class GPTConversationAnalyzer {
       });
 
       // Model 4: Lubometer - ONLY analyzes indicators relevant to buying readiness
-      const lubometerPromise = this.analyzeModel4_Lubometer(transcript, adminSettings?.pillarWeights).then(result => {
+      const lubometerPromise = this.analyzeModel4_Lubometer(transcript, adminSettings?.pillarWeights, sendStream).then(result => {
         if (GPTConversationAnalyzer.DEBUG) console.log(`[MODEL 4 - LUBOMETER] ✓ Completed in ${Date.now() - startTime}ms, score: ${result.finalScore}`);
         sendPartial('analysis_partial', { 
           lubometer: result,
@@ -432,7 +526,7 @@ export class GPTConversationAnalyzer {
       });
 
       // Model 5: Truth Index - ONLY analyzes for incoherence signals
-      const truthIndexPromise = this.analyzeModel5_TruthIndex(transcript).then(result => {
+      const truthIndexPromise = this.analyzeModel5_TruthIndex(transcript, sendStream).then(result => {
         console.log(`[MODEL 5 - TRUTH INDEX] ✓ Completed in ${Date.now() - startTime}ms, score: ${result.score}`);
         sendPartial('analysis_partial', { truthIndex: result });
         return result;
@@ -466,9 +560,14 @@ export class GPTConversationAnalyzer {
   // MODEL 1: PSYCHOLOGICAL DIALS (Top 5 of 27 Indicators)
   // Returns the TOP 5 indicators by intensity from the 27-indicator CSV
   // ============================================================
-  private async analyzeModel1_PsychologicalDials(transcript: string): Promise<any[]> {
+  private async analyzeModel1_PsychologicalDials(
+    transcript: string,
+    sendStream?: (scope: string, event: 'start' | 'delta' | 'done', delta?: string) => void
+  ): Promise<any[]> {
     try {
-      const response = await withOpenAIPool('main', () => this.openai.chat.completions.create({
+      const streamSink = this.makeStreamSink(sendStream, 'psychological_dials');
+      const content = await this.streamChatCompletionToText({
+        pool: 'main',
         model: 'gpt-4o-mini',
         messages: [
           {
@@ -559,10 +658,9 @@ Remember: Score all 27 indicators, then return only the TOP 5 highest-scoring on
         ],
         temperature: 0.4,
         max_tokens: 600,
-        response_format: { type: 'json_object' }
-      }));
-
-      const content = response.choices[0]?.message?.content;
+        response_format: { type: 'json_object' },
+        streamSink,
+      });
       if (!content) return [];
       
       const result = JSON.parse(content);
@@ -730,127 +828,260 @@ Return empty array if NO objections found: {"objections": []}`
   // Minimal prompts + low tokens for maximum speed
   // ============================================================
   
-  private async scorePillar1(transcript: string): Promise<any[]> {
+  private async scorePillar1(transcript: string, streamSink?: (event: 'start' | 'delta' | 'done', delta?: string) => void): Promise<any[]> {
     const t = Date.now();
     try {
-      const response = await withOpenAIPool('main', () => this.openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: `Score 4 indicators (1-10). Return JSON: {"i":[{"id":1,"s":N},{"id":2,"s":N},{"id":3,"s":N},{"id":4,"s":N}]}
+      const txt = streamSink
+        ? await this.streamChatCompletionToText({
+            pool: 'main',
+            model: 'gpt-4o-mini',
+            messages: [
+              { role: 'system', content: `Score 4 indicators (1-10). Return JSON: {"i":[{"id":1,"s":N},{"id":2,"s":N},{"id":3,"s":N},{"id":4,"s":N}]}
 1=Pain Awareness 2=Desire Clarity 3=Desire Priority 4=Duration of Problem` },
-          { role: 'user', content: transcript }
-        ],
-        temperature: 0.1, max_tokens: 80, response_format: { type: 'json_object' }
-      }));
-      const r = JSON.parse(response.choices[0]?.message?.content || '{}');
+              { role: 'user', content: transcript },
+            ],
+            temperature: 0.1,
+            max_tokens: 80,
+            response_format: { type: 'json_object' },
+            streamSink,
+          })
+        : (await withOpenAIPool('main', () =>
+            this.openai.chat.completions.create({
+              model: 'gpt-4o-mini',
+              messages: [
+                { role: 'system', content: `Score 4 indicators (1-10). Return JSON: {"i":[{"id":1,"s":N},{"id":2,"s":N},{"id":3,"s":N},{"id":4,"s":N}]}
+1=Pain Awareness 2=Desire Clarity 3=Desire Priority 4=Duration of Problem` },
+                { role: 'user', content: transcript },
+              ],
+              temperature: 0.1,
+              max_tokens: 80,
+              response_format: { type: 'json_object' },
+            })
+          )).choices[0]?.message?.content || '';
+
+      const r = JSON.parse(txt || '{}');
       console.log(`[P1] ${Date.now()-t}ms`);
       return (r.i || r.indicators || []).map((x: any) => ({ id: x.id, name: ['','Pain Awareness','Desire Clarity','Desire Priority','Duration'][x.id], score: x.s || x.score || 5, pillarId: 'P1' }));
     } catch (e) { console.error('[P1] err'); return [{id:1,name:'Pain Awareness',score:5,pillarId:'P1'},{id:2,name:'Desire Clarity',score:5,pillarId:'P1'},{id:3,name:'Desire Priority',score:5,pillarId:'P1'},{id:4,name:'Duration',score:5,pillarId:'P1'}]; }
   }
 
-  private async scorePillar2(transcript: string): Promise<any[]> {
+  private async scorePillar2(transcript: string, streamSink?: (event: 'start' | 'delta' | 'done', delta?: string) => void): Promise<any[]> {
     const t = Date.now();
     try {
-      const response = await withOpenAIPool('main', () => this.openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: `Score 4 indicators (1-10). Return JSON: {"i":[{"id":5,"s":N},{"id":6,"s":N},{"id":7,"s":N},{"id":8,"s":N}]}
+      const txt = streamSink
+        ? await this.streamChatCompletionToText({
+            pool: 'main',
+            model: 'gpt-4o-mini',
+            messages: [
+              { role: 'system', content: `Score 4 indicators (1-10). Return JSON: {"i":[{"id":5,"s":N},{"id":6,"s":N},{"id":7,"s":N},{"id":8,"s":N}]}
 5=Time Pressure 6=Cost of Delay 7=Internal Timing 8=Availability` },
-          { role: 'user', content: transcript }
-        ],
-        temperature: 0.1, max_tokens: 80, response_format: { type: 'json_object' }
-      }));
-      const r = JSON.parse(response.choices[0]?.message?.content || '{}');
+              { role: 'user', content: transcript },
+            ],
+            temperature: 0.1,
+            max_tokens: 80,
+            response_format: { type: 'json_object' },
+            streamSink,
+          })
+        : (await withOpenAIPool('main', () =>
+            this.openai.chat.completions.create({
+              model: 'gpt-4o-mini',
+              messages: [
+                { role: 'system', content: `Score 4 indicators (1-10). Return JSON: {"i":[{"id":5,"s":N},{"id":6,"s":N},{"id":7,"s":N},{"id":8,"s":N}]}
+5=Time Pressure 6=Cost of Delay 7=Internal Timing 8=Availability` },
+                { role: 'user', content: transcript },
+              ],
+              temperature: 0.1,
+              max_tokens: 80,
+              response_format: { type: 'json_object' },
+            })
+          )).choices[0]?.message?.content || '';
+
+      const r = JSON.parse(txt || '{}');
       console.log(`[P2] ${Date.now()-t}ms`);
       return (r.i || r.indicators || []).map((x: any) => ({ id: x.id, name: ['','','','','','Time Pressure','Cost of Delay','Internal Timing','Availability'][x.id], score: x.s || x.score || 5, pillarId: 'P2' }));
     } catch (e) { console.error('[P2] err'); return [{id:5,name:'Time Pressure',score:5,pillarId:'P2'},{id:6,name:'Cost of Delay',score:5,pillarId:'P2'},{id:7,name:'Internal Timing',score:5,pillarId:'P2'},{id:8,name:'Availability',score:5,pillarId:'P2'}]; }
   }
 
-  private async scorePillar3(transcript: string): Promise<any[]> {
+  private async scorePillar3(transcript: string, streamSink?: (event: 'start' | 'delta' | 'done', delta?: string) => void): Promise<any[]> {
     const t = Date.now();
     try {
-      const response = await withOpenAIPool('main', () => this.openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: `Score 4 indicators (1-10). Return JSON: {"i":[{"id":9,"s":N},{"id":10,"s":N},{"id":11,"s":N},{"id":12,"s":N}]}
+      const txt = streamSink
+        ? await this.streamChatCompletionToText({
+            pool: 'main',
+            model: 'gpt-4o-mini',
+            messages: [
+              { role: 'system', content: `Score 4 indicators (1-10). Return JSON: {"i":[{"id":9,"s":N},{"id":10,"s":N},{"id":11,"s":N},{"id":12,"s":N}]}
 9=Decision Authority 10=Decision Style 11=Commitment 12=Self-Permission` },
-          { role: 'user', content: transcript }
-        ],
-        temperature: 0.1, max_tokens: 80, response_format: { type: 'json_object' }
-      }));
-      const r = JSON.parse(response.choices[0]?.message?.content || '{}');
+              { role: 'user', content: transcript },
+            ],
+            temperature: 0.1,
+            max_tokens: 80,
+            response_format: { type: 'json_object' },
+            streamSink,
+          })
+        : (await withOpenAIPool('main', () =>
+            this.openai.chat.completions.create({
+              model: 'gpt-4o-mini',
+              messages: [
+                { role: 'system', content: `Score 4 indicators (1-10). Return JSON: {"i":[{"id":9,"s":N},{"id":10,"s":N},{"id":11,"s":N},{"id":12,"s":N}]}
+9=Decision Authority 10=Decision Style 11=Commitment 12=Self-Permission` },
+                { role: 'user', content: transcript },
+              ],
+              temperature: 0.1,
+              max_tokens: 80,
+              response_format: { type: 'json_object' },
+            })
+          )).choices[0]?.message?.content || '';
+
+      const r = JSON.parse(txt || '{}');
       console.log(`[P3] ${Date.now()-t}ms`);
       return (r.i || r.indicators || []).map((x: any) => ({ id: x.id, name: ['','','','','','','','','','Decision Authority','Decision Style','Commitment','Self-Permission'][x.id], score: x.s || x.score || 5, pillarId: 'P3' }));
     } catch (e) { console.error('[P3] err'); return [{id:9,name:'Decision Authority',score:5,pillarId:'P3'},{id:10,name:'Decision Style',score:5,pillarId:'P3'},{id:11,name:'Commitment',score:5,pillarId:'P3'},{id:12,name:'Self-Permission',score:5,pillarId:'P3'}]; }
   }
 
-  private async scorePillar4(transcript: string): Promise<any[]> {
+  private async scorePillar4(transcript: string, streamSink?: (event: 'start' | 'delta' | 'done', delta?: string) => void): Promise<any[]> {
     const t = Date.now();
     try {
-      const response = await withOpenAIPool('main', () => this.openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: `Score 4 indicators (1-10). Return JSON: {"i":[{"id":13,"s":N},{"id":14,"s":N},{"id":15,"s":N},{"id":16,"s":N}]}
+      const txt = streamSink
+        ? await this.streamChatCompletionToText({
+            pool: 'main',
+            model: 'gpt-4o-mini',
+            messages: [
+              { role: 'system', content: `Score 4 indicators (1-10). Return JSON: {"i":[{"id":13,"s":N},{"id":14,"s":N},{"id":15,"s":N},{"id":16,"s":N}]}
 13=Resource Access 14=Resource Fluidity 15=Investment Mindset 16=Resourcefulness` },
-          { role: 'user', content: transcript }
-        ],
-        temperature: 0.1, max_tokens: 80, response_format: { type: 'json_object' }
-      }));
-      const r = JSON.parse(response.choices[0]?.message?.content || '{}');
+              { role: 'user', content: transcript },
+            ],
+            temperature: 0.1,
+            max_tokens: 80,
+            response_format: { type: 'json_object' },
+            streamSink,
+          })
+        : (await withOpenAIPool('main', () =>
+            this.openai.chat.completions.create({
+              model: 'gpt-4o-mini',
+              messages: [
+                { role: 'system', content: `Score 4 indicators (1-10). Return JSON: {"i":[{"id":13,"s":N},{"id":14,"s":N},{"id":15,"s":N},{"id":16,"s":N}]}
+13=Resource Access 14=Resource Fluidity 15=Investment Mindset 16=Resourcefulness` },
+                { role: 'user', content: transcript },
+              ],
+              temperature: 0.1,
+              max_tokens: 80,
+              response_format: { type: 'json_object' },
+            })
+          )).choices[0]?.message?.content || '';
+
+      const r = JSON.parse(txt || '{}');
       console.log(`[P4] ${Date.now()-t}ms`);
       return (r.i || r.indicators || []).map((x: any) => ({ id: x.id, name: ['','','','','','','','','','','','','','Resource Access','Resource Fluidity','Investment Mindset','Resourcefulness'][x.id], score: x.s || x.score || 5, pillarId: 'P4' }));
     } catch (e) { console.error('[P4] err'); return [{id:13,name:'Resource Access',score:5,pillarId:'P4'},{id:14,name:'Resource Fluidity',score:5,pillarId:'P4'},{id:15,name:'Investment Mindset',score:5,pillarId:'P4'},{id:16,name:'Resourcefulness',score:5,pillarId:'P4'}]; }
   }
 
-  private async scorePillar5(transcript: string): Promise<any[]> {
+  private async scorePillar5(transcript: string, streamSink?: (event: 'start' | 'delta' | 'done', delta?: string) => void): Promise<any[]> {
     const t = Date.now();
     try {
-      const response = await withOpenAIPool('main', () => this.openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: `Score 4 indicators (1-10). Return JSON: {"i":[{"id":17,"s":N},{"id":18,"s":N},{"id":19,"s":N},{"id":20,"s":N}]}
+      const txt = streamSink
+        ? await this.streamChatCompletionToText({
+            pool: 'main',
+            model: 'gpt-4o-mini',
+            messages: [
+              { role: 'system', content: `Score 4 indicators (1-10). Return JSON: {"i":[{"id":17,"s":N},{"id":18,"s":N},{"id":19,"s":N},{"id":20,"s":N}]}
 17=Problem Recognition 18=Solution Ownership 19=Locus of Control 20=Integrity` },
-          { role: 'user', content: transcript }
-        ],
-        temperature: 0.1, max_tokens: 80, response_format: { type: 'json_object' }
-      }));
-      const r = JSON.parse(response.choices[0]?.message?.content || '{}');
+              { role: 'user', content: transcript },
+            ],
+            temperature: 0.1,
+            max_tokens: 80,
+            response_format: { type: 'json_object' },
+            streamSink,
+          })
+        : (await withOpenAIPool('main', () =>
+            this.openai.chat.completions.create({
+              model: 'gpt-4o-mini',
+              messages: [
+                { role: 'system', content: `Score 4 indicators (1-10). Return JSON: {"i":[{"id":17,"s":N},{"id":18,"s":N},{"id":19,"s":N},{"id":20,"s":N}]}
+17=Problem Recognition 18=Solution Ownership 19=Locus of Control 20=Integrity` },
+                { role: 'user', content: transcript },
+              ],
+              temperature: 0.1,
+              max_tokens: 80,
+              response_format: { type: 'json_object' },
+            })
+          )).choices[0]?.message?.content || '';
+
+      const r = JSON.parse(txt || '{}');
       console.log(`[P5] ${Date.now()-t}ms`);
       return (r.i || r.indicators || []).map((x: any) => ({ id: x.id, name: ['','','','','','','','','','','','','','','','','','Problem Recognition','Solution Ownership','Locus of Control','Integrity'][x.id], score: x.s || x.score || 5, pillarId: 'P5' }));
     } catch (e) { console.error('[P5] err'); return [{id:17,name:'Problem Recognition',score:5,pillarId:'P5'},{id:18,name:'Solution Ownership',score:5,pillarId:'P5'},{id:19,name:'Locus of Control',score:5,pillarId:'P5'},{id:20,name:'Integrity',score:5,pillarId:'P5'}]; }
   }
 
-  private async scorePillar6(transcript: string): Promise<any[]> {
+  private async scorePillar6(transcript: string, streamSink?: (event: 'start' | 'delta' | 'done', delta?: string) => void): Promise<any[]> {
     const t = Date.now();
     try {
-      const response = await withOpenAIPool('main', () => this.openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: `Score 3 price sensitivity indicators (1-10, high=more sensitive). Return JSON: {"i":[{"id":21,"s":N},{"id":22,"s":N},{"id":23,"s":N}]}
+      const txt = streamSink
+        ? await this.streamChatCompletionToText({
+            pool: 'main',
+            model: 'gpt-4o-mini',
+            messages: [
+              { role: 'system', content: `Score 3 price sensitivity indicators (1-10, high=more sensitive). Return JSON: {"i":[{"id":21,"s":N},{"id":22,"s":N},{"id":23,"s":N}]}
 21=Emotional Spending 22=Negotiation Reflex 23=Structural Rigidity` },
-          { role: 'user', content: transcript }
-        ],
-        temperature: 0.1, max_tokens: 60, response_format: { type: 'json_object' }
-      }));
-      const r = JSON.parse(response.choices[0]?.message?.content || '{}');
+              { role: 'user', content: transcript },
+            ],
+            temperature: 0.1,
+            max_tokens: 60,
+            response_format: { type: 'json_object' },
+            streamSink,
+          })
+        : (await withOpenAIPool('main', () =>
+            this.openai.chat.completions.create({
+              model: 'gpt-4o-mini',
+              messages: [
+                { role: 'system', content: `Score 3 price sensitivity indicators (1-10, high=more sensitive). Return JSON: {"i":[{"id":21,"s":N},{"id":22,"s":N},{"id":23,"s":N}]}
+21=Emotional Spending 22=Negotiation Reflex 23=Structural Rigidity` },
+                { role: 'user', content: transcript },
+              ],
+              temperature: 0.1,
+              max_tokens: 60,
+              response_format: { type: 'json_object' },
+            })
+          )).choices[0]?.message?.content || '';
+
+      const r = JSON.parse(txt || '{}');
       console.log(`[P6] ${Date.now()-t}ms`);
       return (r.i || r.indicators || []).map((x: any) => ({ id: x.id, name: ['','','','','','','','','','','','','','','','','','','','','','Emotional Spending','Negotiation Reflex','Structural Rigidity'][x.id], score: x.s || x.score || 5, pillarId: 'P6' }));
     } catch (e) { console.error('[P6] err'); return [{id:21,name:'Emotional Spending',score:5,pillarId:'P6'},{id:22,name:'Negotiation Reflex',score:5,pillarId:'P6'},{id:23,name:'Structural Rigidity',score:5,pillarId:'P6'}]; }
   }
 
-  private async scorePillar7(transcript: string): Promise<any[]> {
+  private async scorePillar7(transcript: string, streamSink?: (event: 'start' | 'delta' | 'done', delta?: string) => void): Promise<any[]> {
     const t = Date.now();
     try {
-      const response = await withOpenAIPool('main', () => this.openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: `Score 4 trust indicators (1-10). Return JSON: {"i":[{"id":24,"s":N},{"id":25,"s":N},{"id":26,"s":N},{"id":27,"s":N}]}
+      const txt = streamSink
+        ? await this.streamChatCompletionToText({
+            pool: 'main',
+            model: 'gpt-4o-mini',
+            messages: [
+              { role: 'system', content: `Score 4 trust indicators (1-10). Return JSON: {"i":[{"id":24,"s":N},{"id":25,"s":N},{"id":26,"s":N},{"id":27,"s":N}]}
 24=External Trust 25=Internal Trust 26=Risk Tolerance 27=ROI Ownership` },
-          { role: 'user', content: transcript }
-        ],
-        temperature: 0.1, max_tokens: 80, response_format: { type: 'json_object' }
-      }));
-      const r = JSON.parse(response.choices[0]?.message?.content || '{}');
+              { role: 'user', content: transcript },
+            ],
+            temperature: 0.1,
+            max_tokens: 80,
+            response_format: { type: 'json_object' },
+            streamSink,
+          })
+        : (await withOpenAIPool('main', () =>
+            this.openai.chat.completions.create({
+              model: 'gpt-4o-mini',
+              messages: [
+                { role: 'system', content: `Score 4 trust indicators (1-10). Return JSON: {"i":[{"id":24,"s":N},{"id":25,"s":N},{"id":26,"s":N},{"id":27,"s":N}]}
+24=External Trust 25=Internal Trust 26=Risk Tolerance 27=ROI Ownership` },
+                { role: 'user', content: transcript },
+              ],
+              temperature: 0.1,
+              max_tokens: 80,
+              response_format: { type: 'json_object' },
+            })
+          )).choices[0]?.message?.content || '';
+
+      const r = JSON.parse(txt || '{}');
       console.log(`[P7] ${Date.now()-t}ms`);
       return (r.i || r.indicators || []).map((x: any) => ({ id: x.id, name: ['','','','','','','','','','','','','','','','','','','','','','','','','External Trust','Internal Trust','Risk Tolerance','ROI Ownership'][x.id], score: x.s || x.score || 5, pillarId: 'P7' }));
     } catch (e) { console.error('[P7] err'); return [{id:24,name:'External Trust',score:5,pillarId:'P7'},{id:25,name:'Internal Trust',score:5,pillarId:'P7'},{id:26,name:'Risk Tolerance',score:5,pillarId:'P7'},{id:27,name:'ROI Ownership',score:5,pillarId:'P7'}]; }
@@ -861,7 +1092,11 @@ Return empty array if NO objections found: {"objections": []}`
   // Uses 7 PARALLEL AI models - one per pillar for faster scoring
   // Self-contained: scores its own indicators, then calculates
   // ============================================================
-  private async analyzeModel4_Lubometer(transcript: string, customWeights?: { id: string; weight: number }[]): Promise<any> {
+  private async analyzeModel4_Lubometer(
+    transcript: string,
+    customWeights?: { id: string; weight: number }[],
+    sendStream?: (scope: string, event: 'start' | 'delta' | 'done', delta?: string) => void
+  ): Promise<any> {
     try {
       const startTime = Date.now();
       
@@ -879,15 +1114,15 @@ Return empty array if NO objections found: {"objections": []}`
       
       // Step 1: Score indicators using 7 PARALLEL AI models (one per pillar)
       console.log(`[MODEL 4] Starting 7 parallel pillar scorers...`);
-      
+
       const [ind1, ind2, ind3, ind4, ind5, ind6, ind7] = await Promise.all([
-        this.scorePillar1(transcript),
-        this.scorePillar2(transcript),
-        this.scorePillar3(transcript),
-        this.scorePillar4(transcript),
-        this.scorePillar5(transcript),
-        this.scorePillar6(transcript),
-        this.scorePillar7(transcript),
+        this.scorePillar1(transcript, this.makeStreamSink(sendStream, 'lubometer_p1')),
+        this.scorePillar2(transcript, this.makeStreamSink(sendStream, 'lubometer_p2')),
+        this.scorePillar3(transcript, this.makeStreamSink(sendStream, 'lubometer_p3')),
+        this.scorePillar4(transcript, this.makeStreamSink(sendStream, 'lubometer_p4')),
+        this.scorePillar5(transcript, this.makeStreamSink(sendStream, 'lubometer_p5')),
+        this.scorePillar6(transcript, this.makeStreamSink(sendStream, 'lubometer_p6')),
+        this.scorePillar7(transcript, this.makeStreamSink(sendStream, 'lubometer_p7')),
       ]);
       
       console.log(`[MODEL 4] All 7 pillar scorers completed in ${Date.now() - startTime}ms`);
@@ -982,9 +1217,14 @@ Return empty array if NO objections found: {"objections": []}`
   // MODEL 5: TRUTH INDEX (Incoherence Detection - CSV Rules)
   // Detects contradictions and calculates truth/authenticity score
   // ============================================================
-  private async analyzeModel5_TruthIndex(transcript: string): Promise<any> {
+  private async analyzeModel5_TruthIndex(
+    transcript: string,
+    sendStream?: (scope: string, event: 'start' | 'delta' | 'done', delta?: string) => void
+  ): Promise<any> {
     try {
-      const response = await withOpenAIPool('main', () => this.openai.chat.completions.create({
+      const streamSink = this.makeStreamSink(sendStream, 'truth_index');
+      const content = await this.streamChatCompletionToText({
+        pool: 'main',
         model: 'gpt-4o-mini',
         messages: [
           {
@@ -1047,10 +1287,9 @@ RETURN JSON:
         ],
         temperature: 0.3,
         max_tokens: 700,
-        response_format: { type: 'json_object' }
-      }));
-
-      const content = response.choices[0]?.message?.content;
+        response_format: { type: 'json_object' },
+        streamSink,
+      });
       if (!content) return { score: 70, penalties: [], explanation: 'No analysis' };
       
       const result = JSON.parse(content);

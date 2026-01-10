@@ -1,7 +1,7 @@
 import type { AnalysisResult } from '../types';
 
 export interface WebSocketMessage {
-  type: 'session' | 'analysis' | 'analysis_partial' | 'analysis_scripts' | 'error';
+  type: 'session' | 'analysis' | 'analysis_partial' | 'analysis_scripts' | 'ai_stream' | 'error';
   sessionId?: string;
   data?: AnalysisResult | any;
   error?: string;
@@ -106,6 +106,16 @@ export class AnalysisWebSocket {
               }
               if (message.data && this.onPartialUpdateCallback) {
                 this.onPartialUpdateCallback('scripts', message.data, runId);
+              }
+              break;
+
+            case 'ai_stream':
+              // FAST: Skip stale stream chunks from older runs
+              if (runId !== undefined && runId < this.latestRunId) {
+                break;
+              }
+              if (message.data && this.onPartialUpdateCallback) {
+                this.onPartialUpdateCallback('ai_stream', message.data, runId);
               }
               break;
             

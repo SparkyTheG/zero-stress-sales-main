@@ -4,6 +4,7 @@ import AnimatedNumber from './AnimatedNumber';
 
 interface PsychologicalDialsProps {
   dials: PsychologicalDial[];
+  isStreaming?: boolean;
 }
 
 // Vibrant gradient colors for each dial position
@@ -25,7 +26,7 @@ function clampIntensity(value: unknown): number {
   return Math.max(0, Math.min(100, Math.round(n)));
 }
 
-export default function PsychologicalDials({ dials }: PsychologicalDialsProps) {
+export default function PsychologicalDials({ dials, isStreaming }: PsychologicalDialsProps) {
   // Take only first 5 dials
   const displayDials = dials.slice(0, 5);
 
@@ -38,6 +39,11 @@ export default function PsychologicalDials({ dials }: PsychologicalDialsProps) {
           <div className="absolute inset-0 blur-md bg-purple-400/30" />
         </div>
         <h2 className="text-2xl font-bold text-white">Top 5 Psychological Dials</h2>
+        {isStreaming && (
+          <div className="ml-2 flex items-center gap-1 px-2 py-1 bg-purple-500/10 border border-purple-500/30 rounded-full animate-pulse">
+            <span className="text-[10px] text-purple-300 font-semibold tracking-wide">UPDATING</span>
+          </div>
+        )}
       </div>
 
       {/* Dials List */}

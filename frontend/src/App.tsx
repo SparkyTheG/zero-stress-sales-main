@@ -161,6 +161,14 @@ function App() {
   const [aiObjectionScripts, setAiObjectionScripts] = useState<Record<string, any>>({});
   const [wsClientRef, setWsClientRef] = useState<ReturnType<typeof getWebSocketClient> | null>(null);
 
+  // Streaming indicators (for perceived speed while score models are running)
+  const [scoreStreaming, setScoreStreaming] = useState<{ lubometer: boolean; psychologicalDials: boolean; truthIndex: boolean }>({
+    lubometer: false,
+    psychologicalDials: false,
+    truthIndex: false,
+  });
+  const scoreStreamingTimeouts = useRef<{ [k: string]: number | null }>({});
+
 
   useEffect(() => {
     try {
@@ -224,6 +232,27 @@ function App() {
               }
             }
           }
+        } else if (type === 'ai_stream') {
+          const scope = String(data?.scope || '');
+          const event = String(data?.event || '');
+
+          const mark = (key: 'lubometer' | 'psychologicalDials' | 'truthIndex') => {
+            setScoreStreaming(prev => (prev[key] ? prev : { ...prev, [key]: true }));
+            const existing = scoreStreamingTimeouts.current[key];
+            if (existing) window.clearTimeout(existing);
+            scoreStreamingTimeouts.current[key] = window.setTimeout(() => {
+              setScoreStreaming(prev2 => ({ ...prev2, [key]: false }));
+              scoreStreamingTimeouts.current[key] = null;
+            }, 2500);
+          };
+
+          // Any stream activity turns the badge on; it auto-clears shortly after last chunk.
+          if (scope.startsWith('lubometer_')) mark('lubometer');
+          if (scope === 'psychological_dials') mark('psychologicalDials');
+          if (scope === 'truth_index') mark('truthIndex');
+
+          // If we ever want to hard-stop immediately, we could check for event === 'done'.
+          void event;
         }
       });
       
@@ -428,8 +457,8 @@ function App() {
       <div className="max-w-[1800px] mx-auto px-8 py-8">
         <div className="grid grid-cols-12 gap-6">
           <div className="col-span-3 space-y-6">
-            <MemoizedLubometer tiers={lubometerTiers} />
-            <MemoizedPsychologicalDials dials={psychologicalDials} />
+            <MemoizedLubometer tiers={lubometerTiers} isStreaming={scoreStreaming.lubometer} />
+            <MemoizedPsychologicalDials dials={psychologicalDials} isStreaming={scoreStreaming.psychologicalDials} />
           </div>
 
           <div id="whisper-engine" className="col-span-6">
@@ -443,7 +472,7 @@ function App() {
           </div>
 
           <div className="col-span-3 space-y-6">
-            <MemoizedTruthIndex score={truthIndexScore} />
+            <MemoizedTruthIndex score={truthIndexScore} isStreaming={scoreStreaming.truthIndex} />
             <MemoizedRedFlags flags={redFlags} />
           </div>
 
