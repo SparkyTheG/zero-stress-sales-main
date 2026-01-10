@@ -168,6 +168,56 @@ function App() {
     truthIndex: false,
   });
   const scoreStreamingTimeouts = useRef<{ [k: string]: number | null }>({});
+  const streamBuffersRef = useRef<Record<string, string>>({});
+  const lastParsedStreamHashRef = useRef<Record<string, string>>({});
+
+  const tryParseBalancedJsonObject = (raw: string): any | null => {
+    // Find a balanced JSON object prefix within `raw` and parse it.
+    const start = raw.indexOf('{');
+    if (start < 0) return null;
+
+    let depthObj = 0;
+    let depthArr = 0;
+    let inStr = false;
+    let esc = false;
+    let lastBalancedEnd = -1;
+
+    for (let i = start; i < raw.length; i++) {
+      const ch = raw[i];
+      if (inStr) {
+        if (esc) {
+          esc = false;
+        } else if (ch === '\\') {
+          esc = true;
+        } else if (ch === '"') {
+          inStr = false;
+        }
+        continue;
+      }
+
+      if (ch === '"') {
+        inStr = true;
+        continue;
+      }
+      if (ch === '{') depthObj++;
+      else if (ch === '}') depthObj = Math.max(0, depthObj - 1);
+      else if (ch === '[') depthArr++;
+      else if (ch === ']') depthArr = Math.max(0, depthArr - 1);
+
+      if (depthObj === 0 && depthArr === 0) {
+        lastBalancedEnd = i;
+      }
+    }
+
+    if (lastBalancedEnd < 0) return null;
+
+    const candidate = raw.slice(start, lastBalancedEnd + 1);
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      return null;
+    }
+  };
 
 
   useEffect(() => {
@@ -235,6 +285,7 @@ function App() {
         } else if (type === 'ai_stream') {
           const scope = String(data?.scope || '');
           const event = String(data?.event || '');
+          const delta = typeof data?.delta === 'string' ? data.delta : '';
 
           const mark = (key: 'lubometer' | 'psychologicalDials' | 'truthIndex') => {
             setScoreStreaming(prev => (prev[key] ? prev : { ...prev, [key]: true }));
@@ -251,8 +302,41 @@ function App() {
           if (scope === 'psychological_dials') mark('psychologicalDials');
           if (scope === 'truth_index') mark('truthIndex');
 
-          // If we ever want to hard-stop immediately, we could check for event === 'done'.
-          void event;
+          // Buffer and attempt early parsing (lets UI update before the final 'done').
+          if (event === 'start') {
+            streamBuffersRef.current[scope] = '';
+            lastParsedStreamHashRef.current[scope] = '';
+          } else if (event === 'delta' && delta) {
+            streamBuffersRef.current[scope] = (streamBuffersRef.current[scope] || '') + delta;
+          }
+
+          // Psychological dials: update as soon as we can parse a complete JSON prefix.
+          if (scope === 'psychological_dials') {
+            const buf = streamBuffersRef.current[scope] || '';
+            const parsed = tryParseBalancedJsonObject(buf);
+            if (parsed && Array.isArray(parsed.psychologicalDials) && parsed.psychologicalDials.length > 0) {
+              const hash = JSON.stringify(parsed.psychologicalDials);
+              if (lastParsedStreamHashRef.current[scope] !== hash) {
+                lastParsedStreamHashRef.current[scope] = hash;
+                const cleaned = parsed.psychologicalDials
+                  .map((d: any) => ({ ...d, name: cleanDialName(d.name) }))
+                  .filter((d: any) => d.name);
+                setPsychologicalDials(prev => upsertRollingDials(prev, cleaned, 5));
+              }
+            }
+          }
+
+          // Truth index: same early parse (score often appears before explanation finishes).
+          if (scope === 'truth_index') {
+            const buf = streamBuffersRef.current[scope] || '';
+            const parsed = tryParseBalancedJsonObject(buf);
+            if (parsed && (typeof parsed.score === 'number' || typeof parsed.score === 'string')) {
+              const n = Number(parsed.score);
+              if (Number.isFinite(n)) {
+                setTruthIndexScore(Math.max(0, Math.min(100, n)));
+              }
+            }
+          }
         }
       });
       
