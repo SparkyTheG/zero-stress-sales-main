@@ -3,10 +3,9 @@ import AnimatedNumber from './AnimatedNumber';
 
 interface TruthIndexProps {
   score: number;
-  isStreaming?: boolean;
 }
 
-export default function TruthIndex({ score, isStreaming }: TruthIndexProps) {
+export default function TruthIndex({ score }: TruthIndexProps) {
   const getColorClass = () => {
     if (score === 0) return 'from-gray-500 to-gray-400';
     if (score >= 80) return 'from-emerald-500 to-green-400';
@@ -57,11 +56,6 @@ export default function TruthIndex({ score, isStreaming }: TruthIndexProps) {
           <div className="absolute inset-0 blur-md bg-emerald-400/30"></div>
         </div>
         <h2 className="text-2xl font-bold text-white">Truth Index™</h2>
-        {isStreaming && (
-          <div className="ml-2 flex items-center gap-1 px-2 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-full animate-pulse">
-            <span className="text-[10px] text-emerald-300 font-semibold tracking-wide">UPDATING</span>
-          </div>
-        )}
       </div>
 
       <div className="text-center mb-6">

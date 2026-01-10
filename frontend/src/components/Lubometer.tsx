@@ -5,10 +5,9 @@ import AnimatedNumber from './AnimatedNumber';
 
 interface LubometerProps {
   tiers: LubometerTier[];
-  isStreaming?: boolean;
 }
 
-export default function Lubometer({ tiers, isStreaming }: LubometerProps) {
+export default function Lubometer({ tiers }: LubometerProps) {
   const { settings } = useSettings();
   
   // Use settings price tiers as defaults, merge with incoming readiness data
@@ -56,11 +55,6 @@ export default function Lubometer({ tiers, isStreaming }: LubometerProps) {
           <div className="absolute inset-0 blur-md bg-emerald-400/30"></div>
         </div>
         <h2 className="text-2xl font-bold text-white">Lubometer™</h2>
-        {isStreaming && (
-          <div className="ml-2 flex items-center gap-1 px-2 py-1 bg-emerald-500/10 border border-emerald-500/30 rounded-full animate-pulse">
-            <span className="text-[10px] text-emerald-300 font-semibold tracking-wide">UPDATING</span>
-          </div>
-        )}
         {hasData && (
           <div className="ml-auto flex items-center gap-1 px-2 py-1 bg-emerald-500/20 rounded-full">
             <Zap className="w-3 h-3 text-emerald-400" />
