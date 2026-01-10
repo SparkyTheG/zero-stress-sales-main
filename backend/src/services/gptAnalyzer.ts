@@ -1501,7 +1501,7 @@ CRITICAL:
           }
         ],
         temperature: 0.3,
-        max_tokens: 2000,
+        max_tokens: 600,
         response_format: { type: 'json_object' }
       }));
 
@@ -1656,7 +1656,7 @@ Return ONLY a JSON object with objectionScripts field:
           }
         ],
         temperature: 0.3,
-        max_tokens: 6000, // More tokens for script generation
+        max_tokens: 600,
         response_format: { type: 'json_object' }
       }));
 
