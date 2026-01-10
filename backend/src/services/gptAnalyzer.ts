@@ -502,13 +502,25 @@ export class GPTConversationAnalyzer {
       });
 
       // Model 3: Scripts - Waits for objections, then generates 2 scripts per objection
+      // FAST: Emit cached scripts immediately, then generate new ones
       const scriptsPromise = objectionsPromise.then(objections => {
         if (!objections || objections.length === 0) {
           if (GPTConversationAnalyzer.DEBUG) console.log(`[MODEL 3 - SCRIPTS] No objections, skipping`);
           return {};
         }
-        return this.analyzeModel3_Scripts(scriptsTranscript, objections, adminSettings?.customScriptPrompt).then(result => {
-          if (GPTConversationAnalyzer.DEBUG) console.log(`[MODEL 3 - SCRIPTS] ✓ Completed in ${Date.now() - startTime}ms, ${Object.keys(result).length} scripts`);
+        return this.analyzeModel3_ScriptsFast(
+          scriptsTranscript,
+          objections,
+          adminSettings?.customScriptPrompt,
+          (cachedScripts) => {
+            // Emit cached scripts immediately so UI updates faster
+            if (Object.keys(cachedScripts).length > 0) {
+              console.log(`[MODEL 3 - SCRIPTS] ⚡ Cached scripts emitted immediately:`, Object.keys(cachedScripts).length);
+              sendPartial('analysis_scripts', { objectionScripts: cachedScripts });
+            }
+          }
+        ).then(result => {
+          if (GPTConversationAnalyzer.DEBUG) console.log(`[MODEL 3 - SCRIPTS] ✓ Completed in ${Date.now() - startTime}ms, ${Object.keys(result).length} total scripts`);
           sendPartial('analysis_scripts', { objectionScripts: result });
           return result;
         });
@@ -821,6 +833,16 @@ Return empty array if NO objections found: {"objections": []}`
   // ============================================================
   private async analyzeModel3_Scripts(transcript: string, objections: any[], customPrompt?: string): Promise<Record<string, any>> {
     return this.generateObjectionScriptsModel(transcript, objections, customPrompt);
+  }
+
+  // FAST variant: emits cached scripts immediately via callback
+  private async analyzeModel3_ScriptsFast(
+    transcript: string,
+    objections: any[],
+    customPrompt?: string,
+    onCachedScripts?: (scripts: Record<string, any>) => void
+  ): Promise<Record<string, any>> {
+    return this.generateObjectionScriptsModelFast(transcript, objections, customPrompt, onCachedScripts);
   }
 
   // ============================================================
@@ -1396,6 +1418,16 @@ Return empty array if NO red flags: {"redFlags": []}`
   // Model 3: Generate Personalized Handling Scripts (separate model)
   // Generates 1 script per detected objection - CACHED to avoid regeneration
   private async generateObjectionScriptsModel(transcript: string, objections: any[], customPrompt?: string): Promise<Record<string, any>> {
+    return this.generateObjectionScriptsModelFast(transcript, objections, customPrompt);
+  }
+
+  // FAST version: emits cached scripts immediately via callback so UI updates faster
+  private async generateObjectionScriptsModelFast(
+    transcript: string,
+    objections: any[],
+    customPrompt?: string,
+    onCachedScripts?: (scripts: Record<string, any>) => void
+  ): Promise<Record<string, any>> {
     // If no objections, return empty
     if (!objections || objections.length === 0) {
       return {};
@@ -1425,6 +1457,11 @@ Return empty array if NO red flags: {"redFlags": []}`
       } else {
         newObjections.push(obj);
       }
+    }
+
+    // ⚡ FAST PATH: Emit cached scripts immediately via callback (don't wait for OpenAI)
+    if (Object.keys(cachedScripts).length > 0 && onCachedScripts) {
+      onCachedScripts(cachedScripts);
     }
 
     // If all objections are cached, return cached scripts immediately
