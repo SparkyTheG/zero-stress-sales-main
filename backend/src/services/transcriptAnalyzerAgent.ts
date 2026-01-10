@@ -76,9 +76,9 @@ export class TranscriptAnalyzerAgent {
   private openai: OpenAI;
   private sessions: Map<string, AgentSession> = new Map();
   // Speed-first: keep less rolling context in-memory for diarization + summaries
-  private static readonly MAX_CONTEXT_CHARS = 5000;
+  private static readonly MAX_CONTEXT_CHARS = 3000;
   // Speaker detection only needs a small, recent window
-  private static readonly SPEAKER_CONTEXT_CHARS = 1500;
+  private static readonly SPEAKER_CONTEXT_CHARS = 800;
   private static readonly FLUSH_INTERVAL_MS = 1000;
   private static readonly FLUSH_MAX_ROWS = 5;
   private static readonly SUMMARY_MIN_INTERVAL_MS = 2 * 60 * 1000;

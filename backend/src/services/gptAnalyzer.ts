@@ -255,12 +255,12 @@ export class GPTConversationAnalyzer {
   private lastAnalysisHash: string = '';
   private lastAnalysisResult: AnalysisResult | null = null;
   // Performance: cap memory + prompt size so the app doesn't slow down over long sessions
-  private static readonly MAX_HISTORY_LINES_STORED = 250; // hard cap in memory
-  // Speed-first prompt windows
-  private static readonly MAX_WINDOW_LINES_FOR_AI = 50; // main analysis context (recent lines)
-  private static readonly MAX_WINDOW_CHARS_FOR_AI = 5000; // main analysis context (recent chars)
-  private static readonly MAX_WINDOW_LINES_FOR_SCRIPTS = 25; // script context (recent lines)
-  private static readonly MAX_WINDOW_CHARS_FOR_SCRIPTS = 2000; // script context (recent chars)
+  private static readonly MAX_HISTORY_LINES_STORED = 150; // hard cap in memory (aggressive speed)
+  // Speed-first prompt windows (aggressive)
+  private static readonly MAX_WINDOW_LINES_FOR_AI = 30; // main analysis context (recent lines)
+  private static readonly MAX_WINDOW_CHARS_FOR_AI = 3000; // main analysis context (recent chars)
+  private static readonly MAX_WINDOW_LINES_FOR_SCRIPTS = 15; // script context (recent lines)
+  private static readonly MAX_WINDOW_CHARS_FOR_SCRIPTS = 1000; // script context (recent chars)
   private static readonly MAX_SCRIPT_CACHE_ITEMS = 120; // prevent unbounded cache growth
   private static readonly DEBUG = process.env.DEBUG_LOGS === '1';
 

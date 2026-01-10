@@ -258,7 +258,7 @@ export async function createRealtimeConnection(options: RealtimeConnectionOption
   
   let conversationHistory = '';
   let isConnected = true;
-  const MAX_HISTORY_CHARS = Number(process.env.MAX_TRANSCRIPT_CHARS || 8000);
+  const MAX_HISTORY_CHARS = Number(process.env.MAX_TRANSCRIPT_CHARS || 5000);
   const AUDIO_FLUSH_INTERVAL_MS = Number(process.env.AUDIO_MIN_INTERVAL_MS || 250);
   const AUDIO_MAX_PENDING_MS = Number(process.env.AUDIO_MAX_PENDING_MS || 600);
   const AUDIO_MAX_PENDING_BYTES = Number(process.env.AUDIO_MAX_PENDING_BYTES || 16000 * 2 * 1); // 1s of PCM16@16k

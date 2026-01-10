@@ -41,7 +41,7 @@ export class ConversationWebSocketServer {
   private openaiApiKey: string;
   private transcriptAgent: TranscriptAnalyzerAgent;
   private static readonly DEBUG = process.env.DEBUG_LOGS === '1';
-  private static readonly MAX_SESSION_CHUNKS = 250; // cap memory per session
+  private static readonly MAX_SESSION_CHUNKS = 150; // cap memory per session (aggressive speed)
 
   constructor(server: Server, openaiApiKey: string) {
     this.openaiApiKey = openaiApiKey;
