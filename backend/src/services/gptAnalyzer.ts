@@ -856,8 +856,8 @@ Return empty array if NO objections found: {"objections": []}`
       const txt = streamSink
         ? await this.streamChatCompletionToText({
             pool: 'main',
-            model: 'gpt-4o-mini',
-            messages: [
+        model: 'gpt-4o-mini',
+        messages: [
               { role: 'system', content: `Score 4 indicators (1-10). Return JSON: {"i":[{"id":1,"s":N},{"id":2,"s":N},{"id":3,"s":N},{"id":4,"s":N}]}
 1=Pain Awareness 2=Desire Clarity 3=Desire Priority 4=Duration of Problem` },
               { role: 'user', content: transcript },
@@ -1563,7 +1563,7 @@ CRITICAL:
         }
         // Cache scripts as array for easy re-keying later
         if (objScriptsArray.length > 0) {
-          this.scriptCache.set(hash, { 
+        this.scriptCache.set(hash, { 
             scripts: Object.fromEntries(objScriptsArray.map((s, i) => [`_${i+1}`, s])),
           });
           // Cap cache size (Map preserves insertion order)

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
-import { Settings, Users, Star, Sliders } from 'lucide-react';
+import { Settings, Users, Star, Sliders, Briefcase } from 'lucide-react';
 import WhisperEngine from './components/WhisperEngine';
 import Lubometer from './components/Lubometer';
 import PsychologicalDials from './components/PsychologicalDials';
@@ -7,6 +7,7 @@ import TruthIndex from './components/TruthIndex';
 import RedFlags from './components/RedFlags';
 import TopObjections from './components/TopObjections';
 import AdminPanel from './components/AdminPanel';
+import { DealSetup } from './components/DealSetup';
 import { useSettings } from './contexts/SettingsContext';
 import { useAuth } from './contexts/AuthContext';
 
@@ -142,7 +143,7 @@ function upsertRollingDials(prev: PsychologicalDial[], incoming: PsychologicalDi
 
 function App() {
   const [selectedObjection, setSelectedObjection] = useState<string | null>(null);
-  const [view, setView] = useState<'dashboard' | 'profile' | 'closer-profile' | 'manager-dashboard' | 'admin'>('dashboard');
+  const [view, setView] = useState<'dashboard' | 'profile' | 'closer-profile' | 'manager-dashboard' | 'admin' | 'deal-setup'>('dashboard');
   const [userRole] = useState<'closer' | 'manager'>('closer');
   const [showPricing, setShowPricing] = useState(false);
   const [showFoundingMember, setShowFoundingMember] = useState(false);
@@ -477,6 +478,10 @@ function App() {
     return <AdminPanel onBack={() => setView('dashboard')} />;
   }
 
+  if (view === 'deal-setup') {
+    return <DealSetup onBack={() => setView('dashboard')} />;
+  }
+
   if (view === 'manager-dashboard') {
     return (
       <SalesManagerDashboard
@@ -524,6 +529,13 @@ function App() {
               >
                 <Users className="w-4 h-4 text-cyan-400" />
                 <span className="text-gray-300 text-sm font-medium">Manager Dashboard</span>
+              </button>
+              <button
+                onClick={() => setView('deal-setup')}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-800/60 hover:bg-gray-800 border border-gray-700/50 rounded-lg transition-all group"
+              >
+                <Briefcase className="w-4 h-4 text-green-400" />
+                <span className="text-gray-300 text-sm font-medium">Deal Setup</span>
               </button>
               {userRole === 'closer' && (
                 <button

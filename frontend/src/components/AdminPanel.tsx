@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Settings, DollarSign, Scale, MessageSquare, RotateCcw, Save, Check, AlertCircle, Mail, Lock, UserPlus, LogIn, FileText } from 'lucide-react';
+import { ArrowLeft, Settings, DollarSign, Scale, MessageSquare, RotateCcw, Save, Check, AlertCircle, Mail, Lock, UserPlus, LogIn, FileText, Brain } from 'lucide-react';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import ConversationSummaries from './ConversationSummaries';
+import { IntelligenceLayer } from './IntelligenceLayer';
 
 // Separate component for price tier input with local state for smooth editing
 function PriceTierInput({ 
@@ -386,7 +387,7 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
 
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [activeTab, setActiveTab] = useState<'settings' | 'summaries'>('settings');
+  const [activeTab, setActiveTab] = useState<'settings' | 'summaries' | 'intelligence'>('settings');
 
   const handleSave = async () => {
     setSaveError(null);
@@ -474,6 +475,17 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
                 <span className="text-sm font-medium">Conversation Summaries</span>
               </button>
               <button
+                onClick={() => setActiveTab('intelligence')}
+                className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition-all ${
+                  activeTab === 'intelligence'
+                    ? 'bg-purple-500/25 border-purple-500/60 text-purple-200'
+                    : 'bg-gray-800/60 hover:bg-gray-700 border-gray-700/50 text-gray-200'
+                }`}
+              >
+                <Brain className="w-4 h-4" />
+                <span className="text-sm font-medium">Intelligence Layer</span>
+              </button>
+              <button
                 onClick={handleSave}
                 disabled={saving}
                 className={`flex items-center gap-2 px-4 py-2 border rounded-lg transition-all ${
@@ -513,6 +525,10 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
 
       {activeTab === 'summaries' ? (
         <ConversationSummaries onBack={() => setActiveTab('settings')} />
+      ) : activeTab === 'intelligence' ? (
+        <div className="max-w-[1400px] mx-auto px-8 py-8">
+          <IntelligenceLayer />
+        </div>
       ) : (
       <div className="max-w-[1400px] mx-auto px-8 py-8">
 
